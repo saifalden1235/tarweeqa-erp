@@ -465,7 +465,7 @@ class _MainAppState extends State<MainApp> {
       totalCount += productsSnap.docs.length;
       for (final p in productsSnap.docs) {
         final data = p.data();
-        totalValue += ((data['quantity'] as num?)?.toDouble() ?? 0) * ((data['price'] as num?)?.toDouble() ?? 0);
+        totalValue += ((data['quantity'] as num?)?.toDouble() ?? 0) * ((data['priceUSD'] as num?)?.toDouble() ?? 0);
       }
     }
     
@@ -1372,7 +1372,7 @@ class _MainAppState extends State<MainApp> {
                   ),
                 ],
                 const SizedBox(height: 8),
-                TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "السعر ($)")),
+                TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "السعر (\$)")),
               ],
             ),
           ),
@@ -2229,7 +2229,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "السعر")),
+                      child: TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "السعر (\$)")),
                     ),
                     const SizedBox(width: 8),
                     DropdownButton<String>(
