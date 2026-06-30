@@ -4,17 +4,17 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:crypto/crypto.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:convert';
-import 'dart:math';
-import 'package:flutter/services.dart';
+import 'dart:io';
 
-// ============================================================
-// إعدادات Firebase والتطبيق
-// ============================================================
+const kPrimary = Color(0xFF1565C0);
+const kPrimaryLight = Color(0xFF2196F3);
+const kBg = Color(0xFFF0F4FF);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // تفعيل الكاش المحلي لـ Firestore (مهم جداً للسرعة)
   await Firebase.initializeApp(
     options: const FirebaseOptions(
       apiKey: "AIzaSyCFNad5ADOdWKfWJf6UfwaGb4s17sjcjDs",
@@ -23,89 +23,59 @@ void main() async {
       projectId: "tarweeqa-erp",
     ),
   );
-  
-  FirebaseFirestore.instance.settings = const Settings(
-    persistenceEnabled: true,
-    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-  );
-  
-  runApp(const RootApp());
+  runApp(const MyApp());
 }
 
-// ============================================================
-// دوال مساعدة
-// ============================================================
 String storeIdFromPassword(String password) {
   final bytes = utf8.encode(password.trim());
   final digest = sha256.convert(bytes);
   return digest.toString().substring(0, 24);
 }
 
-String generateInvoiceNumber() {
-  final now = DateTime.now();
-  final day = now.day.toString().padLeft(2, '0');
-  final month = now.month.toString().padLeft(2, '0');
-  final year = now.year.toString().substring(2);
-  final random = Random().nextInt(9999).toString().padLeft(4, '0');
-  return "$day$month$year-$random";
-}
-
-String formatCurrency(double amount) {
-  if (amount >= 1000000) {
-    return "${(amount / 1000000).toStringAsFixed(1)}M";
-  } else if (amount >= 1000) {
-    return "${(amount / 1000).toStringAsFixed(1)}K";
-  }
-  return amount.toStringAsFixed(0);
-}
-
-// ============================================================
-// الجذر مع دعم Dark Mode
-// ============================================================
-class RootApp extends StatefulWidget {
-  const RootApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+  static _MyAppState? of(BuildContext context) =>
+      context.findAncestorStateOfType<_MyAppState>();
   @override
-  State<RootApp> createState() => _RootAppState();
+  State<MyApp> createState() => _MyAppState();
 }
 
-class _RootAppState extends State<RootApp> {
-  bool darkMode = false;
-  bool showSplash = true;
-
-  @override
-  void initState() {
-    super.initState();
-    loadTheme();
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) setState(() => showSplash = false);
-    });
-  }
-
-  Future<void> loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => darkMode = prefs.getBool('darkMode') ?? false);
-  }
-
-  Future<void> setDarkMode(bool v) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('darkMode', v);
-    setState(() => darkMode = v);
-  }
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.light;
+  void toggleTheme(bool dark) =>
+      setState(() => _themeMode = dark ? ThemeMode.dark : ThemeMode.light);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: "ترويقة ERP",
-      themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: _themeMode,
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF6FAFD),
+        scaffoldBackgroundColor: kBg,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1565C0),
-          primary: const Color(0xFF1565C0),
+          seedColor: kPrimaryLight,
+          primary: kPrimaryLight,
           secondary: const Color(0xFF64B5F6),
           surface: Colors.white,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: kPrimaryLight,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: kPrimaryLight,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        cardTheme: CardTheme(
+          color: Colors.white,
+          elevation: 3,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
       darkTheme: ThemeData(
@@ -113,39 +83,51 @@ class _RootAppState extends State<RootApp> {
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF121212),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1565C0),
+          seedColor: kPrimaryLight,
           brightness: Brightness.dark,
         ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1E1E2E),
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        cardTheme: CardTheme(
+          color: const Color(0xFF1E1E2E),
+          elevation: 3,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
       ),
-      home: showSplash ? const CustomSplashScreen() : MainApp(
-        initialDarkMode: darkMode,
-        onToggleDarkMode: setDarkMode,
-      ),
+      home: const SplashScreen(),
     );
   }
 }
 
-// ============================================================
-// شاشة البداية (Splash Screen) - بتصميم مخصص من صورتك
-// ============================================================
-class CustomSplashScreen extends StatefulWidget {
-  const CustomSplashScreen({super.key});
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
   @override
-  State<CustomSplashScreen> createState() => _CustomSplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _CustomSplashScreenState extends State<CustomSplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
-  late Animation<double> _scale;
-  late Animation<double> _fade;
+  late Animation<double> _fade, _scale;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000));
-    _scale = CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.8, curve: Curves.easeOut));
-    _fade = CurvedAnimation(parent: _ctrl, curve: const Interval(0.6, 1.0, curve: Curves.easeIn));
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+    _fade = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: const Interval(0, 0.6)));
+    _scale = Tween<double>(begin: 0.7, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
     _ctrl.forward();
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (_) => const HomePage()));
+      }
+    });
   }
 
   @override
@@ -160,1255 +142,207 @@ class _CustomSplashScreenState extends State<CustomSplashScreen> with SingleTick
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF8EC5FC), Color(0xFFE0C3FC)],
+            colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
         ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // رسومات زخرفية
-            Positioned(
-              top: 60,
-              left: 20,
-              child: ScaleTransition(
-                scale: _scale,
-                child: const Icon(Icons.local_drink, size: 70, color: Color(0xFF1976D2)),
-              ),
-            ),
-            Positioned(
-              top: 40,
-              right: 20,
-              child: ScaleTransition(
-                scale: _scale,
-                child: const Icon(Icons.egg, size: 60, color: Color(0xFFF5B041)),
-              ),
-            ),
-            Positioned(
-              bottom: 120,
-              left: 20,
-              child: ScaleTransition(
-                scale: _scale,
-                child: const Icon(Icons.local_florist, size: 65, color: Color(0xFF2E7D32)),
-              ),
-            ),
-            Positioned(
-              bottom: 140,
-              right: 20,
-              child: ScaleTransition(
-                scale: _scale,
-                child: const Icon(Icons.icecream, size: 55, color: Color(0xFFF39C12)),
-              ),
-            ),
-            Positioned(
-              top: 180,
-              left: 40,
-              child: ScaleTransition(
-                scale: _scale,
-                child: const Icon(Icons.park, size: 50, color: Color(0xFFF1C40F)),
-              ),
-            ),
-            Positioned(
-              bottom: 80,
-              left: 40,
-              child: ScaleTransition(
-                scale: _scale,
-                child: const Icon(Icons.breakfast_dining, size: 50, color: Color(0xFFE67E22)),
-              ),
-            ),
-
-            // الشعار المركزي
-            FadeTransition(
-              opacity: _fade,
-              child: ScaleTransition(
-                scale: _scale,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 30),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 30, offset: const Offset(0, 10)),
-                    ],
-                    border: Border.all(color: const Color(0xFF1976D2), width: 3),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+        child: Center(
+          child: FadeTransition(
+            opacity: _fade,
+            child: ScaleTransition(
+              scale: _scale,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
-                        "ترويقة",
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1976D2),
-                          fontFamily: 'Arial',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1976D2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          "أجبان وألبان",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        "مواد غذائية وبهارات",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1976D2),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      Text("🧀", style: TextStyle(fontSize: 36)),
+                      SizedBox(width: 12),
+                      Text("🥛", style: TextStyle(fontSize: 36)),
+                      SizedBox(width: 12),
+                      Text("🫙", style: TextStyle(fontSize: 36)),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white, width: 2),
+                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.white.withOpacity(0.15),
+                    ),
+                    child: const Text(
+                      "تَرْوِيقَة",
+                      style: TextStyle(
+                        fontSize: 52,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 2,
+                        shadows: [
+                          Shadow(color: Colors.black26, blurRadius: 8, offset: Offset(2, 2))
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "أجبان وألبان • مواد غذائية وبهارات",
+                    style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 16),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text("🫒", style: TextStyle(fontSize: 36)),
+                      SizedBox(width: 12),
+                      Text("🥚", style: TextStyle(fontSize: 36)),
+                      SizedBox(width: 12),
+                      Text("🌿", style: TextStyle(fontSize: 36)),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ============================================================
-// التطبيق الرئيسي - الصفحات والتنقل
-// ============================================================
-class MainApp extends StatefulWidget {
-  final bool initialDarkMode;
-  final Future<void> Function(bool) onToggleDarkMode;
-
-  const MainApp({
-    super.key, 
-    required this.initialDarkMode, 
-    required this.onToggleDarkMode
-  });
-
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
   @override
-  State<MainApp> createState() => _MainAppState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _MainAppState extends State<MainApp> {
-  int _selectedIndex = 0;
+class _HomePageState extends State<HomePage> {
   String employeeName = "موظف";
+  double dollarRate = 15000.0;
   String? storePassword;
   String? storeId;
-  double dollarRate = 15000.0;
-  
-  // مخازن البيانات
-  List<Map<String, dynamic>> _recentActivities = [];
-  List<Map<String, dynamic>> _lowStockProducts = [];
-  List<Map<String, dynamic>> _employees = [];
-  int _unreadNotifications = 0;
-  List<Map<String, dynamic>> _notifications = [];
-  double _totalInventoryValue = 0;
-  int _totalProductsCount = 0;
-  bool _isConnected = true;
+  bool _darkMode = false;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
-    _listenToActivities();
-    _listenToLowStock();
-    _listenToEmployees();
-    _listenToNotifications();
-    _loadInventoryStats();
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       employeeName = prefs.getString('empName') ?? "موظف";
+      dollarRate = prefs.getDouble('dollarRate') ?? 15000.0;
       storePassword = prefs.getString('storePassword');
       storeId = (storePassword != null && storePassword!.isNotEmpty)
           ? storeIdFromPassword(storePassword!)
           : null;
-    });
-    if (storeId != null) {
-      await _ensureStoreDoc();
-      await _registerEmployee();
-    }
-  }
-
-  Future<void> _ensureStoreDoc() async {
-    if (storeId == null) return;
-    final ref = FirebaseFirestore.instance.collection('stores').doc(storeId);
-    final snap = await ref.get();
-    if (!snap.exists) {
-      await ref.set({'dollarRate': 15000.0, 'createdAt': FieldValue.serverTimestamp()});
-    } else {
-      final data = snap.data();
-      if (data != null && data.containsKey('dollarRate')) {
-        setState(() => dollarRate = (data['dollarRate'] as num).toDouble());
-      }
-    }
-  }
-
-  Future<void> _registerEmployee() async {
-    if (storeId == null) return;
-    await FirebaseFirestore.instance
-        .collection('stores')
-        .doc(storeId)
-        .collection('employees')
-        .doc(employeeName)
-        .set({
-      'name': employeeName,
-      'lastActive': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  void _listenToActivities() {
-    if (storeId == null) return;
-    FirebaseFirestore.instance
-        .collection('stores')
-        .doc(storeId)
-        .collection('activity_log')
-        .orderBy('time', descending: true)
-        .limit(20)
-        .snapshots()
-        .listen((snapshot) {
-      setState(() {
-        _recentActivities = snapshot.docs.map((doc) => doc.data()).toList();
-      });
+      _darkMode = prefs.getBool('darkMode') ?? false;
     });
   }
 
-  void _listenToLowStock() {
-    if (storeId == null) return;
-    FirebaseFirestore.instance
-        .collection('stores')
-        .doc(storeId)
-        .collection('groups')
-        .snapshots()
-        .listen((groupsSnapshot) {
-      for (final groupDoc in groupsSnapshot.docs) {
-        FirebaseFirestore.instance
-            .collection('stores')
-            .doc(storeId)
-            .collection('groups')
-            .doc(groupDoc.id)
-            .collection('products')
-            .where('quantity', isLessThanOrEqualTo: 5)
-            .where('quantity', isGreaterThan: 0)
-            .snapshots()
-            .listen((productsSnapshot) {
-          setState(() {
-            _lowStockProducts = productsSnapshot.docs.map((doc) {
-              final data = doc.data();
-              data['id'] = doc.id;
-              data['groupId'] = groupDoc.id;
-              return data;
-            }).toList();
-          });
-        });
-      }
-    });
-  }
-
-  void _listenToEmployees() {
-    if (storeId == null) return;
-    FirebaseFirestore.instance
-        .collection('stores')
-        .doc(storeId)
-        .collection('employees')
-        .orderBy('lastActive', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-      setState(() {
-        _employees = snapshot.docs.map((doc) {
-          final data = doc.data();
-          data['id'] = doc.id;
-          return data;
-        }).toList();
-      });
-    });
-  }
-
-  void _listenToNotifications() {
-    if (storeId == null) return;
-    FirebaseFirestore.instance
-        .collection('stores')
-        .doc(storeId)
-        .collection('notifications')
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .listen((snapshot) {
-      setState(() {
-        _notifications = snapshot.docs.map((doc) => doc.data()).toList();
-        _unreadNotifications = _notifications.where((n) => n['read'] == false).length;
-      });
-    });
-  }
-
-  Future<void> _loadInventoryStats() async {
-    if (storeId == null) return;
-    double totalValue = 0;
-    int totalCount = 0;
-    
-    final groupsSnap = await FirebaseFirestore.instance
-        .collection('stores')
-        .doc(storeId)
-        .collection('groups')
-        .get();
-    
-    for (final groupDoc in groupsSnap.docs) {
-      final productsSnap = await FirebaseFirestore.instance
-          .collection('stores')
-          .doc(storeId)
-          .collection('groups')
-          .doc(groupDoc.id)
-          .collection('products')
-          .get();
-      
-      totalCount += productsSnap.docs.length;
-      for (final p in productsSnap.docs) {
-        final data = p.data();
-        totalValue += ((data['quantity'] as num?)?.toDouble() ?? 0) * ((data['priceUSD'] as num?)?.toDouble() ?? 0);
-      }
-    }
-    
-    setState(() {
-      _totalInventoryValue = totalValue;
-      _totalProductsCount = totalCount;
-    });
-  }
-
-  void _onItemTapped(int index) {
-    setState(() => _selectedIndex = index);
-  }
-
-  void _showNotification(String title, String message, {Color color = Colors.blue, String type = 'info'}) {
-    if (storeId == null) return;
-    FirebaseFirestore.instance
-        .collection('stores')
-        .doc(storeId)
-        .collection('notifications')
-        .add({
-      'title': title,
-      'message': message,
-      'type': type,
-      'read': false,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  void _markNotificationsAsRead() {
-    if (storeId == null) return;
-    for (final n in _notifications.where((n) => n['read'] == false)) {
-      FirebaseFirestore.instance
-          .collection('stores')
-          .doc(storeId)
-          .collection('notifications')
-          .doc(n['id'] ?? '')
-          .update({'read': true});
-    }
-  }
-
-  // ============================================================
-  // الصفحة 1: Dashboard
-  // ============================================================
-  Widget _buildDashboard() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("مرحباً $employeeName 👋", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                  Text(DateFormat('yyyy/MM/dd - HH:mm').format(DateTime.now()), style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.storefront, color: Colors.blue),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          const Text("اليوم", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _buildStatCard("المبيعات", "0 \$", Icons.monetization_on, Colors.green)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard("الديون", "0 \$", Icons.credit_card, Colors.red)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _buildStatCard("المنتجات", "${_totalProductsCount}", Icons.inventory_2, Colors.blue)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard("القيمة", "${formatCurrency(_totalInventoryValue)} \$", Icons.attach_money, Colors.orange)),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          if (_lowStockProducts.isNotEmpty) ...[
-            const Text("⚠️ تنبيهات المخزون", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
-            const SizedBox(height: 12),
-            ..._lowStockProducts.map((product) => Card(
-              color: Colors.red.withOpacity(0.1),
-              child: ListTile(
-                leading: const Icon(Icons.warning, color: Colors.red),
-                title: Text("${product['name']} - باقي ${product['quantity']} فقط", style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text("الوحدة: ${product['unit'] ?? 'كيلو'}"),
-                trailing: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  onPressed: () {},
-                  child: const Text("تزويد", style: TextStyle(color: Colors.white)),
-                ),
-              ),
-            )).toList(),
-            const SizedBox(height: 24),
-          ],
-
-          const Text("آخر العمليات", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          if (_recentActivities.isEmpty)
-            const Center(child: Text("لا توجد عمليات حديثة", style: TextStyle(color: Colors.grey)))
-          else
-            ..._recentActivities.map((activity) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: activity['type'] == 'sale' 
-                  ? const Icon(Icons.shopping_cart, color: Colors.green)
-                  : activity['type'] == 'payment'
-                  ? const Icon(Icons.money, color: Colors.green)
-                  : const Icon(Icons.info, color: Colors.blue),
-                title: Text(activity['text'] ?? 'عملية جديدة'),
-                subtitle: Text("بواسطة ${activity['by'] ?? 'غير معروف'} • ${activity['time'] != null ? DateFormat('HH:mm').format((activity['time'] as Timestamp).toDate()) : 'الآن'}"),
-              ),
-            )).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // الصفحة 2: الأقسام (مع Drag & Drop و بحث)
-  // ============================================================
-  String _groupsSearchQuery = "";
-  List<Map<String, dynamic>> _groups = [];
-  bool _isLoadingGroups = true;
-
-  Widget _buildGroupsView() {
-    if (storeId == null) return _notLinkedView();
-    
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              const Icon(Icons.category, color: Colors.blue),
-              const SizedBox(width: 10),
-              const Text("الأقسام", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              FloatingActionButton(
-                mini: true,
-                onPressed: _showAddGroupDialog,
-                child: const Icon(Icons.add),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: "ابحث عن قسم...",
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              suffixIcon: _groupsSearchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        setState(() => _groupsSearchQuery = "");
-                      },
-                    )
-                  : null,
-            ),
-            onChanged: (v) => setState(() => _groupsSearchQuery = v.trim().toLowerCase()),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('stores')
-                .doc(storeId)
-                .collection('groups')
-                .orderBy('order')
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final groups = snapshot.data!.docs.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                data['id'] = doc.id;
-                return data;
-              }).toList();
-              
-              _groups = groups;
-              _isLoadingGroups = false;
-              
-              final filtered = groups.where((g) => (g['name'] as String).toLowerCase().contains(_groupsSearchQuery)).toList();
-              
-              if (filtered.isEmpty) {
-                return const Center(child: Text("لا توجد أقسام"));
-              }
-              return ReorderableListView(
-                padding: const EdgeInsets.all(16),
-                onReorder: (oldIndex, newIndex) {
-                  if (newIndex > oldIndex) newIndex -= 1;
-                  final item = filtered.removeAt(oldIndex);
-                  filtered.insert(newIndex, item);
-                  // تحديث الترتيب في Firebase
-                  for (int i = 0; i < filtered.length; i++) {
-                    FirebaseFirestore.instance
-                        .collection('stores')
-                        .doc(storeId)
-                        .collection('groups')
-                        .doc(filtered[i]['id'])
-                        .update({'order': i});
-                  }
-                },
-                children: filtered.map((data) {
-                  return ReorderableDragStartListener(
-                    key: Key(data['id']),
-                    index: filtered.indexOf(data),
-                    child: _buildGroupCard(data['id'], data),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGroupCard(String id, Map<String, dynamic> data) {
-    return GestureDetector(
-      onTap: () {
-        // فتح منتجات هذا القسم
-        _showProductsView(id, data['name'] ?? 'قسم');
-      },
-      onLongPress: () {
-        _showGroupActionsDialog(id, data);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        child: Card(
-          elevation: 6,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          color: Color(data['color'] ?? Colors.blue.value),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.category, size: 30, color: Colors.white),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        data['name'] ?? "قسم",
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      Text(
-                        "عدد المنتجات: ${data['productCount'] ?? 0}",
-                        style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.drag_handle, color: Colors.white70),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showGroupActionsDialog(String id, Map<String, dynamic> data) {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: Text("خيارات القسم: ${data['name']}"),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(c);
-              _showEditGroupDialog(id, data['name']);
-            },
-            child: const Text("تعديل الاسم"),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(c);
-              _showDeleteGroupDialog(id, data['name']);
-            },
-            child: const Text("حذف"),
-          ),
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-        ],
-      ),
-    );
-  }
-
-  void _showAddGroupDialog() {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text("قسم جديد"),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(labelText: "اسم القسم (مثال: ألبان، مكسرات)"),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-          ElevatedButton(
-            onPressed: () async {
-              if (ctrl.text.isNotEmpty && storeId != null) {
-                await FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(storeId)
-                    .collection('groups')
-                    .add({
-                      'name': ctrl.text.trim(),
-                      'color': _randomColor(),
-                      'order': DateTime.now().millisecondsSinceEpoch,
-                      'productCount': 0,
-                    });
-                Navigator.pop(c);
-                _showNotification("تم الإضافة", "تم إنشاء قسم جديد بنجاح", color: Colors.green);
-              }
-            },
-            child: const Text("إضافة"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  int _randomColor() {
-    final colors = [0xFF1976D2, 0xFF388E3C, 0xFFF57C00, 0xFF8E24AA, 0xFF00838F, 0xFFC62828, 0xFF4CAF50, 0xFFFFA000];
-    return colors[Random().nextInt(colors.length)];
-  }
-
-  void _showEditGroupDialog(String id, String currentName) {
-    final ctrl = TextEditingController(text: currentName);
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text("تعديل اسم القسم"),
-        content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: "اسم القسم الجديد")),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-          ElevatedButton(
-            onPressed: () async {
-              if (ctrl.text.trim().isNotEmpty && storeId != null) {
-                await FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(storeId)
-                    .collection('groups')
-                    .doc(id)
-                    .update({'name': ctrl.text.trim()});
-                Navigator.pop(c);
-              }
-            },
-            child: const Text("حفظ"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDeleteGroupDialog(String id, String name) {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text("حذف القسم"),
-        content: Text("هل أنت متأكد من حذف قسم \"$name\"؟ سيتم حذف كل منتجاته أيضاً."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              if (storeId == null) return;
-              final productsSnap = await FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(storeId)
-                  .collection('groups')
-                  .doc(id)
-                  .collection('products')
-                  .get();
-              
-              final batch = FirebaseFirestore.instance.batch();
-              for (final p in productsSnap.docs) {
-                batch.delete(p.reference);
-              }
-              batch.delete(FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(storeId)
-                  .collection('groups')
-                  .doc(id));
-              await batch.commit();
-              
-              if (mounted) Navigator.pop(c);
-              _showNotification("تم الحذف", "تم حذف القسم وجميع منتجاته", color: Colors.red);
-            },
-            child: const Text("حذف", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // عرض منتجات القسم
-  // ============================================================
-  void _showProductsView(String groupId, String groupName) {
+  void _openSettings() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ProductsPage(
-          storeId: storeId!,
-          groupId: groupId,
-          groupName: groupName,
+        builder: (_) => SettingsPage(
           employeeName: employeeName,
           dollarRate: dollarRate,
-          onActivity: _showNotification,
+          storePassword: storePassword,
+          storeId: storeId,
+          darkMode: _darkMode,
+          onSave: (name, rate, pass, dark) async {
+            final prefs = await SharedPreferences.getInstance();
+            setState(() {
+              employeeName = name;
+              dollarRate = rate;
+              _darkMode = dark;
+              storePassword = pass.isEmpty ? null : pass;
+              storeId = storePassword != null ? storeIdFromPassword(storePassword!) : null;
+            });
+            await prefs.setString('empName', name);
+            await prefs.setDouble('dollarRate', rate);
+            await prefs.setBool('darkMode', dark);
+            if (pass.isEmpty) {
+              await prefs.remove('storePassword');
+            } else {
+              await prefs.setString('storePassword', pass);
+            }
+            MyApp.of(context)?.toggleTheme(dark);
+          },
         ),
       ),
     );
   }
 
-  // ============================================================
-  // الصفحة 3: الفواتير
-  // ============================================================
-  String _invoicesSearchQuery = "";
-  String _invoicesFilter = "all"; // all, today, week, month
-
-  Widget _buildInvoicesView() {
-    if (storeId == null) return _notLinkedView();
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              const Icon(Icons.receipt, color: Colors.blue),
-              const SizedBox(width: 10),
-              const Text("الفواتير", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              FloatingActionButton(
-                mini: true,
-                onPressed: () {
-                  _showNewInvoiceDialog();
-                },
-                child: const Icon(Icons.add),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: "ابحث عن فاتورة...",
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onChanged: (v) => setState(() => _invoicesSearchQuery = v.trim().toLowerCase()),
-                ),
-              ),
-              const SizedBox(width: 12),
-              DropdownButton<String>(
-                value: _invoicesFilter,
-                items: const [
-                  DropdownMenuItem(value: "all", child: Text("الكل")),
-                  DropdownMenuItem(value: "today", child: Text("اليوم")),
-                  DropdownMenuItem(value: "week", child: Text("الأسبوع")),
-                  DropdownMenuItem(value: "month", child: Text("الشهر")),
-                ],
-                onChanged: (v) => setState(() => _invoicesFilter = v!),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('stores')
-                .doc(storeId)
-                .collection('invoices')
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              var invoices = snapshot.data!.docs.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final name = (data['customer'] ?? '').toLowerCase();
-                final number = (data['number'] ?? '').toLowerCase();
-                final createdAt = data['createdAt'] as Timestamp?;
-                
-                // فلترة البحث
-                if (!name.contains(_invoicesSearchQuery) && !number.contains(_invoicesSearchQuery)) return false;
-                
-                // فلترة التاريخ
-                if (_invoicesFilter != "all" && createdAt != null) {
-                  final date = createdAt.toDate();
-                  final now = DateTime.now();
-                  if (_invoicesFilter == "today") {
-                    return DateFormat('yyyyMMdd').format(date) == DateFormat('yyyyMMdd').format(now);
-                  } else if (_invoicesFilter == "week") {
-                    final weekStart = now.subtract(Duration(days: now.weekday - 1));
-                    return date.isAfter(weekStart);
-                  } else if (_invoicesFilter == "month") {
-                    return date.month == now.month && date.year == now.year;
-                  }
-                }
-                return true;
-              }).toList();
-              
-              if (invoices.isEmpty) {
-                return const Center(child: Text("لا توجد فواتير مطابقة"));
-              }
-              return ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: invoices.length,
-                itemBuilder: (context, index) {
-                  final doc = invoices[index];
-                  final data = doc.data() as Map<String, dynamic>;
-                  return _buildInvoiceCard(doc.id, data);
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInvoiceCard(String id, Map<String, dynamic> data) {
-    final total = (data['total'] as num?)?.toDouble() ?? 0;
-    final paid = (data['paid'] as num?)?.toDouble() ?? 0;
-    final remaining = total - paid;
-    final status = data['status'] ?? 'pending';
-    final isPaid = status == 'paid';
-
-    return Card(
-      elevation: 4,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () {
-          _showEditInvoiceDialog(id, data);
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(isPaid ? Icons.check_circle : Icons.pending, 
-                           color: isPaid ? Colors.green : Colors.orange),
-                      const SizedBox(width: 8),
-                      Text(
-                        "فاتورة #${data['number'] ?? id.substring(0, 8)}",
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isPaid ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      isPaid ? "مدفوعة" : "دين",
-                      style: TextStyle(
-                        color: isPaid ? Colors.green : Colors.orange,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text("العميل: ${data['customer'] ?? 'غير محدد'}", style: TextStyle(color: Colors.grey[700])),
-              Text("البائع: ${data['seller'] ?? 'غير محدد'}", style: TextStyle(color: Colors.grey[700])),
-              if (data['createdAt'] != null)
-                Text("التاريخ: ${DateFormat('yyyy/MM/dd HH:mm').format((data['createdAt'] as Timestamp).toDate())}", 
-                     style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-              const Divider(),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("الإجمالي", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      Text("$total \$", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("المدفوع", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      Text("$paid \$", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("الباقي", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      Text("$remaining \$", style: TextStyle(
-                        fontSize: 18, 
-                        fontWeight: FontWeight.bold, 
-                        color: remaining > 0 ? Colors.red : Colors.green
-                      )),
-                    ],
-                  ),
-                ],
-              ),
-              if (!isPaid && remaining > 0) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          _showPaymentDialog(id, data, remaining);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text("تسديد الدين", style: TextStyle(color: Colors.white)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          _showEditInvoiceDialog(id, data);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text("تعديل", style: TextStyle(color: Colors.white)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // إنشاء فاتورة جديدة
-  // ============================================================
-  void _showNewInvoiceDialog() {
-    final customerCtrl = TextEditingController();
-    List<Map<String, dynamic>> cart = [];
-    double total = 0;
-    String currency = "USD";
-    
+  void _addGroupDialog() {
+    final ctrl = TextEditingController();
+    Color selectedColor = const Color(0xFFE3F2FD);
+    final colors = [
+      const Color(0xFFE3F2FD),
+      const Color(0xFFFFF9C4),
+      const Color(0xFFE8F5E9),
+      const Color(0xFFFFEBEE),
+      const Color(0xFFF3E5F5),
+      const Color(0xFFE0F2F1),
+    ];
     showDialog(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setD) => AlertDialog(
-          title: const Text("فاتورة جديدة"),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: customerCtrl,
-                    decoration: const InputDecoration(labelText: "اسم العميل"),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Text("العملة: ", style: TextStyle(fontWeight: FontWeight.bold)),
-                      DropdownButton<String>(
-                        value: currency,
-                        items: const [
-                          DropdownMenuItem(value: "USD", child: Text("دولار")),
-                          DropdownMenuItem(value: "LBP", child: Text("ليرة لبنانية")),
-                        ],
-                        onChanged: (v) => setD(() => currency = v!),
+          title: const Text("قسم جديد"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: ctrl,
+                decoration: const InputDecoration(labelText: "اسم القسم"),
+              ),
+              const SizedBox(height: 12),
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Text("اختر لون القسم:", style: TextStyle(fontSize: 13)),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: colors.map((color) => GestureDetector(
+                  onTap: () => setD(() => selectedColor = color),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: selectedColor == color ? Colors.blue : Colors.grey.shade300,
+                        width: selectedColor == color ? 3 : 1,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text("المنتجات:", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        _showAddProductToCartDialog(cart, () {
-                          setD(() {
-                            total = cart.fold(0, (sum, item) => sum + ((item['price'] as num) * (item['quantity'] as num)));
-                          });
-                        });
-                      },
-                      child: const Text("+ إضافة منتج"),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  ...cart.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final item = entry.value;
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        title: Text(item['name'] ?? 'منتج'),
-                        subtitle: Text("${item['quantity']} ${item['unit']} × ${item['price']} $currency"),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, size: 18),
-                              onPressed: () {
-                                _showEditCartItemDialog(item, index, cart, () {
-                                  setD(() {
-                                    total = cart.fold(0, (sum, i) => sum + ((i['price'] as num) * (i['quantity'] as num)));
-                                  });
-                                });
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red, size: 18),
-                              onPressed: () {
-                                setD(() {
-                                  cart.removeAt(index);
-                                  total = cart.fold(0, (sum, i) => sum + ((i['price'] as num) * (i['quantity'] as num)));
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                  const Divider(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("الإجمالي:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      Text("$total $currency", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue)),
-                    ],
-                  ),
-                ],
+                )).toList(),
               ),
-            ),
+            ],
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
             ElevatedButton(
               onPressed: () async {
-                if (storeId == null) return;
-                if (cart.isEmpty) {
-                  _showNotification("خطأ", "يجب إضافة منتجات للفاتورة", color: Colors.red);
-                  return;
+                if (ctrl.text.isNotEmpty && storeId != null) {
+                  await FirebaseFirestore.instance
+                      .collection('stores').doc(storeId).collection('groups')
+                      .add({
+                    'name': ctrl.text.trim(),
+                    'color': selectedColor.value,
+                    'order': DateTime.now().millisecondsSinceEpoch,
+                  });
+                  Navigator.pop(c);
                 }
-                
-                final invoiceNumber = generateInvoiceNumber();
-                final invoiceData = {
-                  'number': invoiceNumber,
-                  'customer': customerCtrl.text.trim().isEmpty ? "غير محدد" : customerCtrl.text.trim(),
-                  'seller': employeeName,
-                  'total': total,
-                  'paid': 0,
-                  'remaining': total,
-                  'status': 'debt',
-                  'items': cart,
-                  'currency': currency,
-                  'createdAt': FieldValue.serverTimestamp(),
-                };
-                
-                await FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(storeId)
-                    .collection('invoices')
-                    .add(invoiceData);
-                
-                // تنقيص المخزون
-                for (final item in cart) {
-                  await _deductStock(item['productId'], item['quantity']);
-                }
-                
-                // تسجيل النشاط
-                await FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(storeId)
-                    .collection('activity_log')
-                    .add({
-                  'text': "فاتورة جديدة #$invoiceNumber للعميل ${customerCtrl.text.trim()} بقيمة $total $currency",
-                  'time': FieldValue.serverTimestamp(),
-                  'by': employeeName,
-                  'type': 'sale',
-                });
-                
-                _showNotification("تم الإنشاء", "فاتورة #$invoiceNumber تم إنشاؤها بنجاح", color: Colors.green);
-                Navigator.pop(c);
-              },
-              child: const Text("إنشاء الفاتورة"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showAddProductToCartDialog(List<Map<String, dynamic>> cart, VoidCallback onUpdate) {
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final qtyCtrl = TextEditingController(text: "1");
-    String unit = "كيلو";
-    String saleMethod = "quantity";
-    double customPrice = 0;
-    
-    showDialog(
-      context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setD) => AlertDialog(
-          title: const Text("إضافة منتج للفاتورة"),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: "اسم المنتج")),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: saleMethod,
-                  items: const [
-                    DropdownMenuItem(value: "quantity", child: Text("بيع بالكمية (كيلو/غرام)")),
-                    DropdownMenuItem(value: "custom", child: Text("بيع بسعر مباشر")),
-                  ],
-                  onChanged: (v) => setD(() => saleMethod = v!),
-                  decoration: const InputDecoration(labelText: "طريقة البيع"),
-                ),
-                const SizedBox(height: 8),
-                if (saleMethod == "quantity") ...[
-                  TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "الكمية")),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: unit,
-                    items: const [
-                      DropdownMenuItem(value: "كيلو", child: Text("كيلو")),
-                      DropdownMenuItem(value: "غرام", child: Text("غرام")),
-                      DropdownMenuItem(value: "قطعة", child: Text("قطعة")),
-                    ],
-                    onChanged: (v) => setD(() => unit = v!),
-                    decoration: const InputDecoration(labelText: "الوحدة"),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "السعر (\$)")),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-            ElevatedButton(
-              onPressed: () {
-                final name = nameCtrl.text.trim();
-                final price = double.tryParse(priceCtrl.text.trim()) ?? 0;
-                final qty = double.tryParse(qtyCtrl.text.trim()) ?? 1;
-                
-                if (name.isEmpty || price <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرجاء إدخال اسم وسعر صحيح")));
-                  return;
-                }
-                
-                cart.add({
-                  'name': name,
-                  'price': price,
-                  'quantity': qty,
-                  'unit': unit,
-                  'method': saleMethod,
-                });
-                onUpdate();
-                Navigator.pop(c);
               },
               child: const Text("إضافة"),
             ),
@@ -1418,550 +352,65 @@ class _MainAppState extends State<MainApp> {
     );
   }
 
-  void _showEditCartItemDialog(Map<String, dynamic> item, int index, List<Map<String, dynamic>> cart, VoidCallback onUpdate) {
-    final priceCtrl = TextEditingController(text: item['price'].toString());
-    final qtyCtrl = TextEditingController(text: item['quantity'].toString());
-    String unit = item['unit'] ?? 'كيلو';
-    
-    showDialog(
+  void _showGroupOptions(QueryDocumentSnapshot doc) {
+    final nameCtrl = TextEditingController(text: doc['name']);
+    showModalBottomSheet(
       context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setD) => AlertDialog(
-          title: Text("تعديل: ${item['name']}"),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "السعر الجديد")),
-                const SizedBox(height: 8),
-                TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "الكمية الجديدة")),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: unit,
-                  items: const [
-                    DropdownMenuItem(value: "كيلو", child: Text("كيلو")),
-                    DropdownMenuItem(value: "غرام", child: Text("غرام")),
-                    DropdownMenuItem(value: "قطعة", child: Text("قطعة")),
-                  ],
-                  onChanged: (v) => setD(() => unit = v!),
-                  decoration: const InputDecoration(labelText: "الوحدة"),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-            ElevatedButton(
-              onPressed: () {
-                final price = double.tryParse(priceCtrl.text.trim()) ?? item['price'];
-                final qty = double.tryParse(qtyCtrl.text.trim()) ?? item['quantity'];
-                
-                cart[index] = {
-                  ...item,
-                  'price': price,
-                  'quantity': qty,
-                  'unit': unit,
-                };
-                onUpdate();
-                Navigator.pop(c);
-              },
-              child: const Text("حفظ"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _deductStock(String productId, double quantity) async {
-    if (storeId == null) return;
-    // البحث عن المنتج في جميع الأقسام
-    final groupsSnap = await FirebaseFirestore.instance
-        .collection('stores')
-        .doc(storeId)
-        .collection('groups')
-        .get();
-    
-    for (final groupDoc in groupsSnap.docs) {
-      final productRef = FirebaseFirestore.instance
-          .collection('stores')
-          .doc(storeId)
-          .collection('groups')
-          .doc(groupDoc.id)
-          .collection('products')
-          .doc(productId);
-      
-      final snap = await productRef.get();
-      if (snap.exists) {
-        final currentQty = (snap.data()?['quantity'] as num?)?.toDouble() ?? 0;
-        await productRef.update({'quantity': currentQty - quantity});
-        return;
-      }
-    }
-  }
-
-  // ============================================================
-  // تعديل فاتورة موجودة
-  // ============================================================
-  void _showEditInvoiceDialog(String id, Map<String, dynamic> data) {
-    final customerCtrl = TextEditingController(text: data['customer'] ?? '');
-    List<Map<String, dynamic>> items = List.from(data['items'] ?? []);
-    double total = items.fold(0, (sum, item) => sum + ((item['price'] as num) * (item['quantity'] as num)));
-    double paid = (data['paid'] as num?)?.toDouble() ?? 0;
-    
-    showDialog(
-      context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setD) => AlertDialog(
-          title: Text("تعديل فاتورة #${data['number']}"),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: customerCtrl, decoration: const InputDecoration(labelText: "اسم العميل")),
-                  const SizedBox(height: 12),
-                  const Text("المنتجات:", style: TextStyle(fontWeight: FontWeight.bold)),
-                  ...items.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final item = entry.value;
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 4),
-                      child: ListTile(
-                        title: Text(item['name'] ?? 'منتج'),
-                        subtitle: Text("${item['quantity']} ${item['unit']} × ${item['price']}"),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () {
-                            setD(() {
-                              items.removeAt(index);
-                              total = items.fold(0, (sum, i) => sum + ((i['price'] as num) * (i['quantity'] as num)));
-                            });
-                          },
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                  Center(
-                    child: TextButton(
-                      onPressed: () {
-                        _showAddProductToCartDialog(items, () {
-                          setD(() {
-                            total = items.fold(0, (sum, item) => sum + ((item['price'] as num) * (item['quantity'] as num)));
-                          });
-                        });
-                      },
-                      child: const Text("+ إضافة منتج"),
-                    ),
-                  ),
-                  const Divider(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("الإجمالي الجديد:", style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text("$total \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                    ],
-                  ),
-                  if (total > paid)
-                    Text("⚠️ الإجمالي أكبر من المدفوع ($paid \$). سيصبح ديناً.", 
-                         style: const TextStyle(color: Colors.red, fontSize: 12)),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-            ElevatedButton(
-              onPressed: () async {
-                if (storeId == null) return;
-                final newRemaining = total - paid;
-                final status = newRemaining <= 0 ? 'paid' : 'debt';
-                
-                // تحديث الفاتورة
-                await FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(storeId)
-                    .collection('invoices')
-                    .doc(id)
-                    .update({
-                  'customer': customerCtrl.text.trim().isEmpty ? "غير محدد" : customerCtrl.text.trim(),
-                  'items': items,
-                  'total': total,
-                  'remaining': newRemaining,
-                  'status': status,
-                });
-                
-                // تحديث المخزون (تنقيص/إرجاع)
-                final oldItems = data['items'] as List? ?? [];
-                for (final oldItem in oldItems) {
-                  await _deductStock(oldItem['productId'], -oldItem['quantity']); // إرجاع
-                }
-                for (final newItem in items) {
-                  await _deductStock(newItem['productId'], newItem['quantity']); // خصم جديد
-                }
-                
-                Navigator.pop(c);
-                _showNotification("تم التعديل", "تم تحديث الفاتورة بنجاح", color: Colors.green);
-              },
-              child: const Text("حفظ التعديلات"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // تسديد الدين
-  // ============================================================
-  void _showPaymentDialog(String invoiceId, Map<String, dynamic> data, double remaining) {
-    final amountCtrl = TextEditingController(text: remaining.toString());
-    
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text("تسديد الدين"),
-        content: Column(
+      builder: (_) => SafeArea(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text("المتبقي: $remaining \$", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: amountCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: "المبلغ المدفوع"),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () async {
-              final amount = double.tryParse(amountCtrl.text.trim());
-              if (amount == null || amount <= 0) {
-                _showNotification("خطأ", "أدخل مبلغ صحيح", color: Colors.red);
-                return;
-              }
-              
-              if (amount > remaining) {
-                _showNotification("خطأ", "المبلغ المدفوع أكبر من المتبقي ($remaining \$)", color: Colors.red);
-                return;
-              }
-              
-              if (storeId == null) return;
-              final newRemaining = remaining - amount;
-              final isPaid = newRemaining <= 0;
-              
-              await FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(storeId)
-                  .collection('invoices')
-                  .doc(invoiceId)
-                  .update({
-                'paid': FieldValue.increment(amount),
-                'remaining': newRemaining,
-                'status': isPaid ? 'paid' : 'debt',
-                if (isPaid) 'paidAt': FieldValue.serverTimestamp(),
-              });
-              
-              // تسجيل النشاط
-              await FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(storeId)
-                  .collection('activity_log')
-                  .add({
-                'text': "تسديد دين بقيمة $amount \$ للفاتورة #${data['number']}",
-                'time': FieldValue.serverTimestamp(),
-                'by': employeeName,
-                'type': 'payment',
-              });
-              
-              _showNotification("تم التسديد", "تم تسجيل المبلغ بنجاح", color: Colors.green);
-              Navigator.pop(c);
-            },
-            child: const Text("تسديد", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // الصفحة 4: الإعدادات (تم إصلاح خطأ Dark Mode نهائياً)
-  // ============================================================
-  bool _isUpdating = false;
-  final TextEditingController _dollarCtrl = TextEditingController();
-  final TextEditingController _nameCtrl = TextEditingController();
-
-  Widget _buildSettingsView() {
-    _dollarCtrl.text = dollarRate.toString();
-    _nameCtrl.text = employeeName;
-    
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("الإعدادات", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _isConnected ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(_isConnected ? Icons.wifi : Icons.wifi_off, 
-                         size: 14, color: _isConnected ? Colors.green : Colors.red),
-                    const SizedBox(width: 6),
-                    Text(_isConnected ? "متصل" : "غير متصل", 
-                         style: TextStyle(fontSize: 12, color: _isConnected ? Colors.green : Colors.red)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          
-          // المتجر
-          _buildSettingsCard("المتجر", [
-            _buildSettingTile("كلمة سر المتجر", storePassword ?? "غير محدد", Icons.lock, () {
-              _showPasswordChangeDialog();
-            }),
-            _buildSettingTile("عدد الموظفين", "${_employees.length}", Icons.people, null),
-            if (_employees.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8, bottom: 8, left: 16, right: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("الموظفون المتصلون:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 6),
-                    ..._employees.map((e) {
-                      final lastActive = e['lastActive'] as Timestamp?;
-                      return ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.person, color: Colors.green, size: 20),
-                        title: Text(e['name'] ?? 'موظف', style: const TextStyle(fontSize: 14)),
-                        subtitle: Text(
-                          lastActive != null 
-                            ? "آخر نشاط: ${DateFormat('yyyy/MM/dd HH:mm').format(lastActive.toDate())}"
-                            : "غير متصل",
-                          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                        ),
-                      );
-                    }).toList(),
-                  ],
-                ),
-              ),
-            _buildSettingTile("سعر الدولار", "$dollarRate ل.س", Icons.attach_money, () {
-              _showDollarRateDialog();
-            }),
-          ]),
-          
-          const SizedBox(height: 16),
-          
-          // الموظف
-          _buildSettingsCard("الموظف", [
             ListTile(
-              leading: const Icon(Icons.person, color: Colors.blue),
-              title: const Text("اسم الموظف"),
-              subtitle: Text(employeeName, style: TextStyle(color: Colors.grey[600])),
-              trailing: const Icon(Icons.check_circle, color: Colors.green),
-              onTap: () {},
+              leading: const Icon(Icons.edit, color: kPrimaryLight),
+              title: const Text("تعديل اسم القسم"),
+              onTap: () {
+                Navigator.pop(context);
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text("تعديل القسم"),
+                    content: TextField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(labelText: "الاسم الجديد"),
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+                      ElevatedButton(
+                        onPressed: () async {
+                          await doc.reference.update({'name': nameCtrl.text.trim()});
+                          Navigator.pop(context);
+                        },
+                        child: const Text("حفظ"),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextField(
-                controller: _nameCtrl,
-                decoration: const InputDecoration(
-                  labelText: "تعديل الاسم",
-                  suffixIcon: Icon(Icons.save, color: Colors.blue),
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (v) async {
-                  final name = v.trim();
-                  if (name.isNotEmpty && name != employeeName) {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setString('empName', name);
-                    setState(() => employeeName = name);
-                    if (storeId != null) await _registerEmployee();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ تم حفظ الاسم")));
-                  }
-                },
-              ),
-            ),
-          ]),
-          
-          const SizedBox(height: 16),
-          
-          // عام
-          _buildSettingsCard("عام", [
-            // ===== هذا هو الجزء المصلح 100% =====
-            SwitchListTile(
-              title: const Text("الوضع الليلي"),
-              value: widget.initialDarkMode,
-              onChanged: (v) => widget.onToggleDarkMode(v),
-            ),
-            // ====================================
             ListTile(
-              leading: const Icon(Icons.info, color: Colors.blue),
-              title: const Text("حول التطبيق"),
-              subtitle: const Text("ترويقة ERP - الإصدار 1.0.0"),
-              onTap: () {},
-            ),
-          ]),
-          
-          const SizedBox(height: 20),
-          if (storeId != null)
-            Center(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.link_off),
-                label: const Text("إلغاء الربط بالمتجر", style: TextStyle(color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
-                ),
-                onPressed: () async {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (c2) => AlertDialog(
-                      title: const Text("تأكيد إلغاء الربط"),
-                      content: const Text("هل أنت متأكد من إلغاء الربط بالمتجر؟ ستحتاج كلمة السر للرجوع مجدداً."),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(c2, false), child: const Text("إلغاء")),
-                        ElevatedButton(onPressed: () => Navigator.pop(c2, true), child: const Text("تأكيد")),
-                      ],
-                    ),
-                  );
-                  if (ok == true) {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.remove('storePassword');
-                    setState(() {
-                      storePassword = null;
-                      storeId = null;
-                    });
-                    _showNotification("تم الإلغاء", "تم إلغاء الربط بنجاح", color: Colors.orange);
-                  }
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsCard(String title, List<Widget> children) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
-            const SizedBox(height: 8),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingTile(String label, String value, IconData icon, VoidCallback? onTap) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.blue),
-      title: Text(label),
-      subtitle: Text(value, style: TextStyle(color: Colors.grey[600])),
-      onTap: onTap,
-      trailing: onTap != null ? const Icon(Icons.arrow_forward_ios, size: 16) : null,
-    );
-  }
-
-  // ============================================================
-  // إعدادات - تغيير كلمة السر
-  // ============================================================
-  void _showPasswordChangeDialog() {
-    final ctrl = TextEditingController(text: storePassword ?? "");
-    bool obscure = true;
-    
-    showDialog(
-      context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setD) => AlertDialog(
-          title: const Text("تغيير كلمة سر المتجر"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: ctrl,
-                obscureText: obscure,
-                decoration: InputDecoration(
-                  labelText: "كلمة السر الجديدة",
-                  hintText: "اتركها فاضية لإلغاء الربط",
-                  suffixIcon: IconButton(
-                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setD(() => obscure = !obscure),
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text("حذف القسم", style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text("تأكيد الحذف"),
+                    content: Text("هل تريد حذف قسم '${doc['name']}' وكل منتجاته؟"),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                        onPressed: () async {
+                          await doc.reference.delete();
+                          Navigator.pop(context);
+                        },
+                        child: const Text("حذف"),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              if (ctrl.text.trim().isNotEmpty && ctrl.text.trim().length < 4)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    "⚠️ كلمة السر ضعيفة، يُفضل كلمة أقوى (4 أحرف على الأقل)",
-                    style: TextStyle(color: Colors.orange, fontSize: 12),
-                  ),
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-            ElevatedButton(
-              onPressed: () async {
-                final newPass = ctrl.text.trim();
-                final oldPass = storePassword ?? "";
-                final passwordChanged = newPass != oldPass;
-                
-                Future<void> applyChanges() async {
-                  storePassword = newPass.isEmpty ? null : newPass;
-                  storeId = storePassword != null ? storeIdFromPassword(storePassword!) : null;
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString('storePassword', newPass);
-                  if (storeId != null) {
-                    await _ensureStoreDoc();
-                    await _registerEmployee();
-                  }
-                  setState(() {});
-                  Navigator.pop(c);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ تم الحفظ")));
-                }
-                
-                if (passwordChanged && oldPass.isNotEmpty) {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (c2) => AlertDialog(
-                      title: const Text("تأكيد تغيير كلمة السر"),
-                      content: const Text("تغيير كلمة السر سيفصلك عن المتجر الحالي ويربطك بمتجر جديد. متابعة؟"),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(c2, false), child: const Text("إلغاء")),
-                        ElevatedButton(onPressed: () => Navigator.pop(c2, true), child: const Text("تأكيد")),
-                      ],
-                    ),
-                  );
-                  if (ok == true) await applyChanges();
-                } else {
-                  await applyChanges();
-                }
+                );
               },
-              child: const Text("حفظ"),
             ),
           ],
         ),
@@ -1969,268 +418,643 @@ class _MainAppState extends State<MainApp> {
     );
   }
 
-  // ============================================================
-  // إعدادات - تغيير سعر الدولار (يتزامن لحظياً)
-  // ============================================================
-  void _showDollarRateDialog() {
-    final ctrl = TextEditingController(text: dollarRate.toString());
-    
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text("تغيير سعر الدولار"),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: "سعر الدولار بالليرة"),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-          ElevatedButton(
-            onPressed: () async {
-              final rate = double.tryParse(ctrl.text.trim());
-              if (rate == null || rate <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("أدخل سعراً صحيحاً")));
-                return;
-              }
-              if (storeId != null) {
-                await FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(storeId)
-                    .update({'dollarRate': rate});
-                setState(() => dollarRate = rate);
-                // تحديث لجميع الموظفين عبر Stream
-              }
-              Navigator.pop(c);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ تم تحديث السعر إلى $rate")));
-            },
-            child: const Text("حفظ"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // شاشة عدم الربط
-  // ============================================================
-  Widget _notLinkedView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.link_off, size: 80, color: Colors.blue[200]),
-            const SizedBox(height: 20),
-            const Text(
-              "لم يتم ربط التطبيق بمتجر بعد",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "أدخل كلمة السر في الإعدادات للبدء",
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.settings),
-              onPressed: () {
-                setState(() => _selectedIndex = 3);
-              },
-              label: const Text("فتح الإعدادات"),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // الـ Build الرئيسي
-  // ============================================================
   @override
   Widget build(BuildContext context) {
-    if (storeId == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text("ترويقة ERP"),
-          centerTitle: true,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings),
-              onPressed: () {
-                setState(() => _selectedIndex = 3);
-              },
-            ),
-          ],
-        ),
-        body: _notLinkedView(),
-      );
-    }
-
-    final pages = [
-      _buildDashboard(),
-      _buildGroupsView(),
-      _buildInvoicesView(),
-      _buildSettingsView(),
-    ];
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("ترويقة ERP"),
-        centerTitle: true,
-        actions: [
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications),
-                onPressed: () {
-                  _showNotificationsDialog();
-                  _markNotificationsAsRead();
-                },
-              ),
-              if (_unreadNotifications > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text(
-                      '$_unreadNotifications',
-                      style: const TextStyle(color: Colors.white, fontSize: 10),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text("تَرْوِيقَة",
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: Colors.white)),
+            ),
+            const SizedBox(width: 8),
+            const Text("| الأقسام", style: TextStyle(fontSize: 14, color: Colors.white70)),
+          ],
+        ),
+        actions: [
+          IconButton(icon: const Icon(Icons.settings), onPressed: _openSettings),
         ],
       ),
-      body: pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: "الرئيسية"),
-          BottomNavigationBarItem(icon: Icon(Icons.category), label: "الأقسام"),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt), label: "الفواتير"),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: "الإعدادات"),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // نافذة الإشعارات
-  // ============================================================
-  void _showNotificationsDialog() {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text("الإشعارات"),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 300,
-          child: _notifications.isEmpty
-              ? const Center(child: Text("لا توجد إشعارات"))
-              : ListView.builder(
-                  itemCount: _notifications.length,
-                  itemBuilder: (context, index) {
-                    final n = _notifications[index];
-                    final isRead = n['read'] == true;
-                    return ListTile(
-                      leading: Icon(
-                        n['type'] == 'sale' ? Icons.shopping_cart :
-                        n['type'] == 'payment' ? Icons.money :
-                        n['type'] == 'warning' ? Icons.warning : Icons.info,
-                        color: n['type'] == 'sale' ? Colors.green :
-                               n['type'] == 'payment' ? Colors.blue :
-                               n['type'] == 'warning' ? Colors.orange : Colors.grey,
+      body: storeId == null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.link_off, size: 80, color: Colors.blue[200]),
+                    const SizedBox(height: 16),
+                    const Text("لم يتم ربط التطبيق بمتجر بعد",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    const Text("اذهب إلى الإعدادات وأدخل كلمة سر المتجر",
+                        style: TextStyle(color: Colors.grey), textAlign: TextAlign.center),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: _openSettings,
+                      icon: const Icon(Icons.settings),
+                      label: const Text("فتح الإعدادات"),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance.collection('stores').doc(storeId).snapshots(),
+                  builder: (context, snap) {
+                    double rate = dollarRate;
+                    if (snap.hasData && snap.data!.exists) {
+                      final data = snap.data!.data() as Map<String, dynamic>?;
+                      if (data != null && data['dollarRate'] != null) {
+                        rate = (data['dollarRate'] as num).toDouble();
+                        if (rate != dollarRate) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            setState(() => dollarRate = rate);
+                            SharedPreferences.getInstance().then((p) => p.setDouble('dollarRate', rate));
+                          });
+                        }
+                      }
+                    }
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      color: const Color(0xFFE3F2FD),
+                      child: Text(
+                        "👤 $employeeName   |   💵 ${NumberFormat("#,##0").format(rate)} ل.س",
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimary, fontSize: 13),
+                        textAlign: TextAlign.center,
                       ),
-                      title: Text(n['title'] ?? 'إشعار', style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.bold)),
-                      subtitle: Text(n['message'] ?? ''),
-                      tileColor: isRead ? null : Colors.blue.withOpacity(0.05),
                     );
                   },
                 ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("إغلاق")),
+                _NavRow(empName: employeeName, storeId: storeId!, currentDollar: dollarRate),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('stores').doc(storeId).collection('groups')
+                        .orderBy('order').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                      final groups = snapshot.data!.docs;
+                      return GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 14,
+                          childAspectRatio: 1.1,
+                        ),
+                        itemCount: groups.length + 1,
+                        itemBuilder: (context, index) {
+                          if (index == groups.length) {
+                            return GestureDetector(
+                              onTap: _addGroupDialog,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: Colors.grey[300]!),
+                                ),
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.add_circle_outline, size: 40, color: Colors.grey),
+                                      SizedBox(height: 6),
+                                      Text("قسم جديد", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          final doc = groups[index];
+                          final data = doc.data() as Map<String, dynamic>;
+                          final color = data['color'] != null
+                              ? Color(data['color'] as int)
+                              : const Color(0xFFE3F2FD);
+                          return GestureDetector(
+                            onTap: () => Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => ProductsPage(
+                                storeId: storeId!,
+                                groupId: doc.id,
+                                groupName: doc['name'],
+                                empName: employeeName,
+                                currentDollar: dollarRate,
+                              ),
+                            )),
+                            onLongPress: () => _showGroupOptions(doc),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4)),
+                                ],
+                              ),
+                              child: Stack(
+                                children: [
+                                  Center(
+                                    child: Text(doc['name'],
+                                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: kPrimary),
+                                        textAlign: TextAlign.center),
+                                  ),
+                                  Positioned(
+                                    top: 8, left: 8,
+                                    child: StreamBuilder<QuerySnapshot>(
+                                      stream: FirebaseFirestore.instance
+                                          .collection('stores').doc(storeId)
+                                          .collection('groups').doc(doc.id)
+                                          .collection('products').snapshots(),
+                                      builder: (_, snap) {
+                                        final count = snap.hasData ? snap.data!.docs.length : 0;
+                                        bool hasLow = false;
+                                        if (snap.hasData) {
+                                          for (var p in snap.data!.docs) {
+                                            if ((p['qty'] ?? 0).toDouble() <= 3) { hasLow = true; break; }
+                                          }
+                                        }
+                                        return Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: kPrimary.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text("$count منتج",
+                                                  style: const TextStyle(fontSize: 10, color: kPrimary, fontWeight: FontWeight.bold)),
+                                            ),
+                                            if (hasLow) ...[
+                                              const SizedBox(width: 4),
+                                              const CircleAvatar(radius: 5, backgroundColor: Colors.red),
+                                            ]
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _NavRow extends StatelessWidget {
+  final String empName, storeId;
+  final double currentDollar;
+  const _NavRow({required this.empName, required this.storeId, required this.currentDollar});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      child: Row(
+        children: [
+          Expanded(child: _NavBtn(icon: Icons.point_of_sale, label: "فاتورة جديدة", color: kPrimaryLight,
+              onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => NewInvoicePage(storeId: storeId, empName: empName, currentDollar: currentDollar))))),
+          const SizedBox(width: 8),
+          Expanded(child: _NavBtn(icon: Icons.receipt_long, label: "الفواتير", color: const Color(0xFF2E7D32),
+              onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => InvoicesPage(storeId: storeId, debtOnly: false))))),
+          const SizedBox(width: 8),
+          Expanded(child: _NavBtn(icon: Icons.warning_amber_rounded, label: "الدين", color: Colors.red[700]!,
+              onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => InvoicesPage(storeId: storeId, debtOnly: true))))),
         ],
       ),
     );
   }
 }
 
-// ============================================================
-// صفحة منتجات القسم (ProductsPage)
-// ============================================================
-class ProductsPage extends StatefulWidget {
-  final String storeId;
-  final String groupId;
-  final String groupName;
+class _NavBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _NavBtn({required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 3),
+            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SettingsPage extends StatefulWidget {
   final String employeeName;
   final double dollarRate;
-  final Function(String, String, {Color color, String type}) onActivity;
+  final String? storePassword, storeId;
+  final bool darkMode;
+  final Function(String, double, String, bool) onSave;
 
+  const SettingsPage({
+    super.key,
+    required this.employeeName,
+    required this.dollarRate,
+    required this.storePassword,
+    required this.storeId,
+    required this.darkMode,
+    required this.onSave,
+  });
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  late TextEditingController nameCtrl, rateCtrl, passCtrl;
+  bool _obscure = true, _darkMode = false, _connected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    nameCtrl = TextEditingController(text: widget.employeeName);
+    rateCtrl = TextEditingController(text: widget.dollarRate.toStringAsFixed(0));
+    passCtrl = TextEditingController(text: widget.storePassword ?? "");
+    _darkMode = widget.darkMode;
+    _checkConnection();
+  }
+
+  Future<void> _checkConnection() async {
+    try {
+      await FirebaseFirestore.instance.collection('_ping').doc('ping').get()
+          .timeout(const Duration(seconds: 3));
+      if (mounted) setState(() => _connected = true);
+    } catch (_) {
+      if (mounted) setState(() => _connected = false);
+    }
+  }
+
+  bool _isWeak(String p) => p.isNotEmpty && p.length < 6;
+
+  void _autoSave() {
+    final name = nameCtrl.text.trim().isEmpty ? "موظف" : nameCtrl.text.trim();
+    final rate = double.tryParse(rateCtrl.text) ?? 15000.0;
+    SharedPreferences.getInstance().then((p) {
+      p.setString('empName', name);
+      p.setDouble('dollarRate', rate);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("تم الحفظ التلقائي"), duration: Duration(seconds: 1)),
+    );
+  }
+
+  void _save() {
+    final oldPass = widget.storePassword ?? "";
+    final newPass = passCtrl.text.trim();
+    if (oldPass.isNotEmpty && newPass.isNotEmpty && oldPass != newPass) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text("تحذير: تغيير كلمة السر"),
+          content: const Text("تغيير كلمة السر سيفصلك عن المتجر الحالي. هل تريد المتابعة؟"),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              onPressed: () { Navigator.pop(context); _doSave(); },
+              child: const Text("متابعة"),
+            ),
+          ],
+        ),
+      );
+    } else {
+      _doSave();
+    }
+  }
+
+  void _doSave() {
+    final name = nameCtrl.text.trim().isEmpty ? "موظف" : nameCtrl.text.trim();
+    final rate = double.tryParse(rateCtrl.text) ?? 15000.0;
+    final pass = passCtrl.text.trim();
+    widget.onSave(name, rate, pass, _darkMode);
+    if (pass.isNotEmpty) {
+      final sid = storeIdFromPassword(pass);
+      FirebaseFirestore.instance.collection('stores').doc(sid)
+          .set({'dollarRate': rate}, SetOptions(merge: true));
+      FirebaseFirestore.instance.collection('stores').doc(sid)
+          .collection('employees').doc(name)
+          .set({'name': name, 'lastSeen': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("✅ تم الحفظ والربط بنجاح"), backgroundColor: Colors.green),
+    );
+    Navigator.pop(context);
+  }
+
+  Future<void> _exportBackup() async {
+    try {
+      final sid = widget.storeId!;
+      final Map<String, dynamic> backup = {};
+      final groups = await FirebaseFirestore.instance
+          .collection('stores').doc(sid).collection('groups').get();
+      final groupsData = [];
+      for (var g in groups.docs) {
+        final products = await FirebaseFirestore.instance
+            .collection('stores').doc(sid).collection('groups').doc(g.id).collection('products').get();
+        groupsData.add({'id': g.id, 'name': g['name'], 'products': products.docs.map((p) => p.data()).toList()});
+      }
+      backup['groups'] = groupsData;
+      final invoices = await FirebaseFirestore.instance
+          .collection('stores').doc(sid).collection('invoices').get();
+      backup['invoices'] = invoices.docs.map((i) => i.data()).toList();
+      final json = jsonEncode(backup);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/tarweeqa_backup_${DateTime.now().millisecondsSinceEpoch}.json');
+      await file.writeAsString(json);
+      await Share.shareXFiles([XFile(file.path)], text: 'نسخة احتياطية - ترويقة ERP');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        title: const Text("الإعدادات"),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _section("معلومات الموظف"),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: "اسم الموظف"),
+                    onSubmitted: (_) => _autoSave(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: rateCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: "سعر الدولار (ل.س)"),
+                    onSubmitted: (_) => _autoSave(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _section("ربط المتجر"),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(radius: 6, backgroundColor: _connected ? Colors.green : Colors.red),
+                      const SizedBox(width: 8),
+                      Text(_connected ? "متصل بـ Firestore" : "غير متصل",
+                          style: TextStyle(color: _connected ? Colors.green : Colors.red, fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const Text("أي شخص يدخل نفس كلمة السر سيشارك نفس بيانات المتجر",
+                      style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: passCtrl,
+                    obscureText: _obscure,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: "كلمة سر المتجر",
+                      hintText: "اتركها فاضية لإلغاء الربط",
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                      errorText: _isWeak(passCtrl.text) ? "كلمة السر ضعيفة (أقل من 6 أحرف)" : null,
+                    ),
+                  ),
+                  if (widget.storeId != null) ...[
+                    const SizedBox(height: 12),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('stores').doc(widget.storeId)
+                          .collection('employees').orderBy('lastSeen', descending: true).snapshots(),
+                      builder: (_, snap) {
+                        if (!snap.hasData || snap.data!.docs.isEmpty) return const SizedBox();
+                        final emps = snap.data!.docs;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.people, size: 16, color: Colors.green),
+                                const SizedBox(width: 4),
+                                Text("الموظفون المرتبطون (${emps.length})",
+                                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ...emps.map((e) {
+                              final data = e.data() as Map<String, dynamic>;
+                              final lastSeen = data['lastSeen'] as Timestamp?;
+                              String timeStr = "غير معروف";
+                              if (lastSeen != null) {
+                                final diff = DateTime.now().difference(lastSeen.toDate());
+                                if (diff.inMinutes < 1) timeStr = "الآن";
+                                else if (diff.inHours < 1) timeStr = "منذ ${diff.inMinutes} د";
+                                else if (diff.inDays < 1) timeStr = "منذ ${diff.inHours} س";
+                                else timeStr = "منذ ${diff.inDays} يوم";
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.circle, size: 10, color: Colors.green),
+                                    const SizedBox(width: 6),
+                                    Text(data['name'] ?? "موظف",
+                                        style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
+                                    const Spacer(),
+                                    Text(timeStr, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text("تأكيد إلغاء الربط"),
+                            content: const Text("هل تريد فصل هذا الجهاز عن المتجر الحالي؟"),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                onPressed: () { passCtrl.text = ""; Navigator.pop(context); _doSave(); },
+                                child: const Text("إلغاء الربط"),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.link_off),
+                      label: const Text("إلغاء الربط بالمتجر"),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _section("المظهر"),
+          Card(
+            child: SwitchListTile(
+              title: const Text("الوضع الليلي 🌙"),
+              value: _darkMode,
+              onChanged: (v) => setState(() => _darkMode = v),
+            ),
+          ),
+          if (widget.storeId != null) ...[
+            const SizedBox(height: 16),
+            _section("النسخ الاحتياطي (اختياري)"),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("تصدير كل بيانات المتجر كملف JSON وإرساله عبر واتساب أو حفظه",
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      onPressed: _exportBackup,
+                      icon: const Icon(Icons.download),
+                      label: const Text("تصدير نسخة احتياطية"),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _isWeak(passCtrl.text) ? null : _save,
+            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            child: const Text("حفظ الإعدادات", style: TextStyle(fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _section(String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 8, right: 4),
+        child: Text(t, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: kPrimary)),
+      );
+}
+
+class ProductsPage extends StatefulWidget {
+  final String storeId, groupId, groupName, empName;
+  final double currentDollar;
   const ProductsPage({
     super.key,
     required this.storeId,
     required this.groupId,
     required this.groupName,
-    required this.employeeName,
-    required this.dollarRate,
-    required this.onActivity,
+    required this.empName,
+    required this.currentDollar,
   });
-
   @override
   State<ProductsPage> createState() => _ProductsPageState();
 }
 
 class _ProductsPageState extends State<ProductsPage> {
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _searchQuery = "";
-  String _sortBy = "name"; // name, quantity, price, date
-  bool _sortAscending = true;
+  String _search = "", _sortBy = "name";
 
-  void _logActivity(String text) {
-    FirebaseFirestore.instance
-        .collection('stores')
-        .doc(widget.storeId)
-        .collection('activity_log')
-        .add({
-      'text': text,
-      'time': FieldValue.serverTimestamp(),
-      'by': widget.employeeName,
-      'type': 'product',
-    });
-    widget.onActivity("نشاط منتج", text, color: Colors.blue, type: 'info');
+  CollectionReference get _ref => FirebaseFirestore.instance
+      .collection('stores').doc(widget.storeId)
+      .collection('groups').doc(widget.groupId)
+      .collection('products');
+
+  double _toUSD(double val, String currency) {
+    if (currency == "دولار") return val;
+    if (currency == "ل.س قديمة") return widget.currentDollar > 0 ? val / widget.currentDollar : 0;
+    return widget.currentDollar > 0 ? (val * 100) / widget.currentDollar : 0;
   }
 
-  void _showAddProductDialog() {
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final quantityCtrl = TextEditingController();
-    String unit = "كيلو";
-    String currency = "USD";
+  void _productDialog({QueryDocumentSnapshot? existing}) {
+    final data = existing?.data() as Map<String, dynamic>?;
+    final nameCtrl = TextEditingController(text: data?['name'] ?? "");
+    final qtyCtrl = TextEditingController(text: (data?['qty'] ?? "").toString());
+    final priceCtrl = TextEditingController(text: data != null ? (data['priceUSD'] ?? 0).toStringAsFixed(2) : "");
+    String unit = data?['unit'] ?? "عدد";
+    String currency = "دولار";
 
     showDialog(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setD) => AlertDialog(
-          title: const Text("إضافة منتج جديد"),
+          title: Text(existing == null ? "إضافة منتج" : "تعديل المنتج"),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2240,34 +1064,37 @@ class _ProductsPageState extends State<ProductsPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "السعر (\$)")),
+                      child: TextField(
+                        controller: qtyCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "الكمية"),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    DropdownButton<String>(
+                      value: unit,
+                      items: ["عدد", "كيلو", "غرام"]
+                          .map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                      onChanged: (v) => setD(() => unit = v ?? "عدد"),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: priceCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "السعر"),
+                      ),
                     ),
                     const SizedBox(width: 8),
                     DropdownButton<String>(
                       value: currency,
-                      items: const [
-                        DropdownMenuItem(value: "USD", child: Text("\$")),
-                        DropdownMenuItem(value: "LBP", child: Text("ل.ل")),
-                      ],
-                      onChanged: (v) => setD(() => currency = v!),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(controller: quantityCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "الكمية")),
-                    ),
-                    const SizedBox(width: 8),
-                    DropdownButton<String>(
-                      value: unit,
-                      items: const [
-                        DropdownMenuItem(value: "كيلو", child: Text("كيلو")),
-                        DropdownMenuItem(value: "غرام", child: Text("غرام")),
-                        DropdownMenuItem(value: "قطعة", child: Text("قطعة")),
-                      ],
-                      onChanged: (v) => setD(() => unit = v!),
+                      items: ["دولار", "ل.س قديمة", "ل.س جديدة"]
+                          .map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      onChanged: (v) => setD(() => currency = v ?? "دولار"),
                     ),
                   ],
                 ),
@@ -2278,169 +1105,28 @@ class _ProductsPageState extends State<ProductsPage> {
             TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
             ElevatedButton(
               onPressed: () async {
-                final name = nameCtrl.text.trim();
-                final priceInput = double.tryParse(priceCtrl.text.trim()) ?? 0;
-                final quantity = double.tryParse(quantityCtrl.text.trim()) ?? 0;
-
-                if (name.isEmpty || priceInput <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("اسم المنتج والسعر مطلوبان")));
-                  return;
+                if (nameCtrl.text.isNotEmpty) {
+                  final priceUSD = _toUSD(double.tryParse(priceCtrl.text) ?? 0, currency);
+                  final d = {
+                    'name': nameCtrl.text.trim(),
+                    'qty': double.tryParse(qtyCtrl.text) ?? 0,
+                    'unit': unit,
+                    'priceUSD': priceUSD,
+                    'addedBy': widget.empName,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  };
+                  if (existing == null) {
+                    await _ref.add(d);
+                  } else {
+                    await existing.reference.update(d);
+                  }
+                  Navigator.pop(c);
                 }
-
-                // تحويل السعر إلى دولار
-                final priceInUSD = currency == "USD" ? priceInput : priceInput / widget.dollarRate;
-
-                await FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(widget.storeId)
-                    .collection('groups')
-                    .doc(widget.groupId)
-                    .collection('products')
-                    .add({
-                  'name': name,
-                  'priceUSD': priceInUSD,
-                  'priceLBP': priceInUSD * widget.dollarRate,
-                  'quantity': quantity,
-                  'unit': unit,
-                  'currency': currency,
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'updatedAt': FieldValue.serverTimestamp(),
-                });
-
-                // تحديث عدد المنتجات في القسم
-                final groupRef = FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(widget.storeId)
-                    .collection('groups')
-                    .doc(widget.groupId);
-                final snap = await groupRef.get();
-                final currentCount = (snap.data()?['productCount'] as int?) ?? 0;
-                await groupRef.update({'productCount': currentCount + 1});
-
-                _logActivity("أضاف منتج: $name");
-                Navigator.pop(c);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ تم إضافة $name")));
               },
-              child: const Text("إضافة"),
+              child: Text(existing == null ? "إضافة" : "حفظ التعديل"),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showEditProductDialog(String id, Map<String, dynamic> data) {
-    final nameCtrl = TextEditingController(text: data['name']);
-    final priceCtrl = TextEditingController(text: data['priceUSD'].toString());
-    final quantityCtrl = TextEditingController(text: data['quantity'].toString());
-    String unit = data['unit'] ?? 'كيلو';
-
-    showDialog(
-      context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setD) => AlertDialog(
-          title: const Text("تعديل المنتج"),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: "اسم المنتج")),
-                const SizedBox(height: 8),
-                TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "السعر (\$)")),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(controller: quantityCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "الكمية")),
-                    ),
-                    const SizedBox(width: 8),
-                    DropdownButton<String>(
-                      value: unit,
-                      items: const [
-                        DropdownMenuItem(value: "كيلو", child: Text("كيلو")),
-                        DropdownMenuItem(value: "غرام", child: Text("غرام")),
-                        DropdownMenuItem(value: "قطعة", child: Text("قطعة")),
-                      ],
-                      onChanged: (v) => setD(() => unit = v!),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                final price = double.tryParse(priceCtrl.text.trim()) ?? 0;
-                final quantity = double.tryParse(quantityCtrl.text.trim()) ?? 0;
-
-                await FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(widget.storeId)
-                    .collection('groups')
-                    .doc(widget.groupId)
-                    .collection('products')
-                    .doc(id)
-                    .update({
-                  'name': name,
-                  'priceUSD': price,
-                  'priceLBP': price * widget.dollarRate,
-                  'quantity': quantity,
-                  'unit': unit,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                });
-
-                _logActivity("عدل منتج: $name");
-                Navigator.pop(c);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ تم تعديل $name")));
-              },
-              child: const Text("حفظ"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showDeleteProductDialog(String id, String name) {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text("حذف المنتج"),
-        content: Text("هل أنت متأكد من حذف \"$name\"؟"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(widget.storeId)
-                  .collection('groups')
-                  .doc(widget.groupId)
-                  .collection('products')
-                  .doc(id)
-                  .delete();
-              
-              // تحديث عدد المنتجات
-              final groupRef = FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(widget.storeId)
-                  .collection('groups')
-                  .doc(widget.groupId);
-              final snap = await groupRef.get();
-              final currentCount = (snap.data()?['productCount'] as int?) ?? 0;
-              await groupRef.update({'productCount': currentCount - 1});
-              
-              _logActivity("حذف منتج: $name");
-              Navigator.pop(c);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("🗑️ تم حذف $name")));
-            },
-            child: const Text("حذف", style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
@@ -2449,141 +1135,136 @@ class _ProductsPageState extends State<ProductsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.groupName),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.sort),
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (c) => AlertDialog(
-                  title: const Text("ترتيب المنتجات"),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        title: const Text("بالاسم (أبجدي)"),
-                        leading: Radio(value: "name", groupValue: _sortBy, onChanged: (v) {
-                          setState(() => _sortBy = v as String);
-                          Navigator.pop(c);
-                        }),
-                      ),
-                      ListTile(
-                        title: const Text("بالكمية"),
-                        leading: Radio(value: "quantity", groupValue: _sortBy, onChanged: (v) {
-                          setState(() => _sortBy = v as String);
-                          Navigator.pop(c);
-                        }),
-                      ),
-                      ListTile(
-                        title: const Text("بالسعر"),
-                        leading: Radio(value: "price", groupValue: _sortBy, onChanged: (v) {
-                          setState(() => _sortBy = v as String);
-                          Navigator.pop(c);
-                        }),
-                      ),
-                      ListTile(
-                        title: const Text("تاريخ الإضافة"),
-                        leading: Radio(value: "date", groupValue: _sortBy, onChanged: (v) {
-                          setState(() => _sortBy = v as String);
-                          Navigator.pop(c);
-                        }),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        setState(() => _sortAscending = !_sortAscending);
-                        Navigator.pop(c);
-                      },
-                      child: Text(_sortAscending ? "ترتيب تصاعدي" : "ترتيب تنازلي"),
-                    ),
-                  ],
-                ),
-              );
-            },
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
+        ),
+        title: Text(widget.groupName, style: const TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort),
+            onSelected: (v) => setState(() => _sortBy = v),
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: "name", child: Text("ترتيب أبجدي")),
+              const PopupMenuItem(value: "qty", child: Text("حسب الكمية")),
+            ],
+          ),
+          IconButton(icon: const Icon(Icons.add), onPressed: () => _productDialog()),
         ],
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             child: TextField(
-              controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: "ابحث عن منتج...",
+                hintText: "بحث في المنتجات...",
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          setState(() {
-                            _searchCtrl.clear();
-                            _searchQuery = "";
-                          });
-                        },
-                      )
-                    : null,
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               ),
-              onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+              onChanged: (v) => setState(() => _search = v),
             ),
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(widget.storeId)
-                  .collection('groups')
-                  .doc(widget.groupId)
-                  .collection('products')
-                  .snapshots(),
+              stream: _ref.snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                var products = snapshot.data!.docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final name = (data['name'] ?? '').toLowerCase();
-                  return name.contains(_searchQuery);
-                }).toList();
-                
-                // الترتيب
-                products.sort((a, b) {
-                  final da = a.data() as Map<String, dynamic>;
-                  final db = b.data() as Map<String, dynamic>;
-                  int cmp = 0;
-                  switch (_sortBy) {
-                    case "name":
-                      cmp = (da['name'] ?? '').compareTo(db['name'] ?? '');
-                      break;
-                    case "quantity":
-                      cmp = ((da['quantity'] as num?)?.toDouble() ?? 0).compareTo((db['quantity'] as num?)?.toDouble() ?? 0);
-                      break;
-                    case "price":
-                      cmp = ((da['priceUSD'] as num?)?.toDouble() ?? 0).compareTo((db['priceUSD'] as num?)?.toDouble() ?? 0);
-                      break;
-                    case "date":
-                      final t1 = (da['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-                      final t2 = (db['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-                      cmp = t1.compareTo(t2);
-                      break;
-                  }
-                  return _sortAscending ? cmp : -cmp;
-                });
-                
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                var products = snapshot.data!.docs
+                    .where((p) => (p['name'] ?? "").toString().toLowerCase().contains(_search.toLowerCase()))
+                    .toList();
+                products.sort((a, b) => _sortBy == "qty"
+                    ? (b['qty'] ?? 0).compareTo(a['qty'] ?? 0)
+                    : (a['name'] ?? "").compareTo(b['name'] ?? ""));
                 if (products.isEmpty) {
-                  return const Center(child: Text("لا توجد منتجات"));
+                  return const Center(child: Text("لا توجد منتجات", style: TextStyle(color: Colors.grey)));
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   itemCount: products.length,
-                  itemBuilder: (context, index) {
-                    final doc = products[index];
-                    final data = doc.data() as Map<String, dynamic>;
-                    return _buildProductCard(doc.id, data);
+                  itemBuilder: (_, i) {
+                    final p = products[i];
+                    final data = p.data() as Map<String, dynamic>;
+                    final qty = (data['qty'] ?? 0).toDouble();
+                    final unit = data['unit'] ?? "عدد";
+                    final priceUSD = (data['priceUSD'] ?? 0.0).toDouble();
+                    final priceLiraOld = priceUSD * widget.currentDollar;
+                    final priceLiraNew = priceLiraOld / 100;
+                    final isLow = qty <= 3;
+                    final updatedAt = data['updatedAt'] as Timestamp?;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      color: isLow ? Colors.red[50] : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(data['name'] ?? "",
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                ),
+                                if (isLow) const Icon(Icons.warning_amber, color: Colors.red, size: 18),
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: kPrimaryLight, size: 20),
+                                  onPressed: () => _productDialog(existing: p),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                  onPressed: () async {
+                                    final ok = await showDialog<bool>(
+                                      context: context,
+                                      builder: (_) => AlertDialog(
+                                        title: const Text("حذف المنتج"),
+                                        content: Text("هل تريد حذف '${data['name']}'؟"),
+                                        actions: [
+                                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("إلغاء")),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                            onPressed: () => Navigator.pop(context, true),
+                                            child: const Text("حذف"),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (ok == true) await p.reference.delete();
+                                  },
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isLow ? Colors.red[100] : const Color(0xFFE3F2FD),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                "الكمية: ${qty.toStringAsFixed(qty % 1 == 0 ? 0 : 2)} $unit${isLow ? " ⚠️ نفاد قريب" : ""}",
+                                style: TextStyle(color: isLow ? Colors.red : kPrimary, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text("💵 ${NumberFormat("#,##0.##").format(priceUSD)} \$", style: const TextStyle(fontSize: 14)),
+                            Text("ل.س قديمة: ${NumberFormat("#,##0").format(priceLiraOld)}", style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                            Text("ل.س جديدة: ${NumberFormat("#,##0.##").format(priceLiraNew)}", style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                            if (updatedAt != null)
+                              Text(
+                                "آخر تحديث: ${DateFormat('yyyy/MM/dd HH:mm').format(updatedAt.toDate())}",
+                                style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
                   },
                 );
               },
@@ -2591,85 +1272,895 @@ class _ProductsPageState extends State<ProductsPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddProductDialog,
-        child: const Icon(Icons.add),
+    );
+  }
+}
+
+class CartItem {
+  final String productId, groupId, name, unit;
+  final double priceUSD;
+  double qty;
+  String qtyType;
+  double? directPriceUSD;
+
+  CartItem({
+    required this.productId,
+    required this.groupId,
+    required this.name,
+    required this.unit,
+    required this.priceUSD,
+    required this.qty,
+    this.qtyType = "عدد",
+    this.directPriceUSD,
+  });
+
+  double get totalUSD {
+    if (qtyType == "سعر_مباشر" && directPriceUSD != null) return directPriceUSD!;
+    if (qtyType == "غرام") return priceUSD * (qty / 1000);
+    return priceUSD * qty;
+  }
+}
+
+class NewInvoicePage extends StatefulWidget {
+  final String storeId, empName;
+  final double currentDollar;
+  const NewInvoicePage({super.key, required this.storeId, required this.empName, required this.currentDollar});
+  @override
+  State<NewInvoicePage> createState() => _NewInvoicePageState();
+}
+
+class _NewInvoicePageState extends State<NewInvoicePage> {
+  final List<CartItem> cart = [];
+
+  double get totalUSD => cart.fold(0.0, (s, i) => s + i.totalUSD);
+  double get totalLiraOld => totalUSD * widget.currentDollar;
+  double get totalLiraNew => totalLiraOld / 100;
+
+  double _toUSD(double val, String currency) {
+    if (currency == "دولار") return val;
+    if (currency == "ل.س قديمة") return widget.currentDollar > 0 ? val / widget.currentDollar : 0;
+    return widget.currentDollar > 0 ? (val * 100) / widget.currentDollar : 0;
+  }
+
+  void _editQtyDialog(CartItem item) {
+    String qtyType = item.qtyType;
+    final qtyCtrl = TextEditingController(text: item.qty.toStringAsFixed(0));
+    final priceCtrl = TextEditingController(text: item.directPriceUSD?.toStringAsFixed(2) ?? "");
+    String currency = "دولار";
+
+    showDialog(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setD) => AlertDialog(
+          title: Text("تحديد كمية: ${item.name}"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 8,
+                children: ["عدد", "كيلو", "غرام", "سعر مباشر"].map((t) {
+                  final val = t == "سعر مباشر" ? "سعر_مباشر" : t;
+                  return ChoiceChip(
+                    label: Text(t),
+                    selected: qtyType == val,
+                    onSelected: (_) => setD(() => qtyType = val),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              if (qtyType != "سعر_مباشر")
+                TextField(
+                  controller: qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                      labelText: "الكمية (${qtyType == "غرام" ? "غرام" : qtyType == "كيلو" ? "كيلو" : "عدد"})"),
+                )
+              else
+                Column(
+                  children: [
+                    TextField(
+                      controller: priceCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: "السعر"),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButton<String>(
+                      value: currency,
+                      isExpanded: true,
+                      items: ["دولار", "ل.س قديمة", "ل.س جديدة"]
+                          .map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      onChanged: (v) => setD(() => currency = v ?? "دولار"),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  item.qtyType = qtyType;
+                  if (qtyType == "سعر_مباشر") {
+                    item.directPriceUSD = _toUSD(double.tryParse(priceCtrl.text) ?? 0, currency);
+                    item.qty = 1;
+                  } else {
+                    item.qty = double.tryParse(qtyCtrl.text) ?? 1;
+                    item.directPriceUSD = null;
+                  }
+                });
+                Navigator.pop(c);
+              },
+              child: const Text("تأكيد"),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildProductCard(String id, Map<String, dynamic> data) {
-    final name = data['name'] ?? 'منتج';
-    final priceUSD = (data['priceUSD'] as num?)?.toDouble() ?? 0;
-    final priceLBP = (data['priceLBP'] as num?)?.toDouble() ?? 0;
-    final quantity = (data['quantity'] as num?)?.toDouble() ?? 0;
-    final unit = data['unit'] ?? 'كيلو';
-    final updatedAt = data['updatedAt'] as Timestamp?;
-    final createdAt = data['createdAt'] as Timestamp?;
+  void _pickProducts() async {
+    final groupsSnap = await FirebaseFirestore.instance
+        .collection('stores').doc(widget.storeId).collection('groups').get();
+    if (!mounted) return;
+    String? selectedGroupId = groupsSnap.docs.isNotEmpty ? groupsSnap.docs.first.id : null;
 
-    return Card(
-      elevation: 4,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () {
-          _showEditProductDialog(id, data);
-        },
-        onLongPress: () {
-          _showDeleteProductDialog(id, name);
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: quantity <= 5 ? Colors.red.withOpacity(0.1) : Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setSheet) => DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (c, scrollCtrl) => Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                const Text("اختر المنتجات", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: groupsSnap.docs.map((g) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ChoiceChip(
+                        label: Text(g['name']),
+                        selected: g.id == selectedGroupId,
+                        onSelected: (_) => setSheet(() => selectedGroupId = g.id),
+                      ),
+                    )).toList(),
+                  ),
                 ),
-                child: Icon(
-                  quantity <= 5 ? Icons.warning : Icons.inventory_2,
-                  color: quantity <= 5 ? Colors.red : Colors.blue,
-                  size: 30,
+                const Divider(),
+                Expanded(
+                  child: selectedGroupId == null
+                      ? const Center(child: Text("لا توجد أقسام"))
+                      : StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('stores').doc(widget.storeId)
+                              .collection('groups').doc(selectedGroupId)
+                              .collection('products').snapshots(),
+                          builder: (context, snap) {
+                            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                            final products = snap.data!.docs;
+                            if (products.isEmpty) return const Center(child: Text("لا توجد منتجات"));
+                            return ListView.builder(
+                              controller: scrollCtrl,
+                              itemCount: products.length,
+                              itemBuilder: (c, i) {
+                                final p = products[i];
+                                final price = (p['priceUSD'] ?? 0.0).toDouble();
+                                return ListTile(
+                                  title: Text(p['name'] ?? ""),
+                                  subtitle: Text("${NumberFormat("#,##0.##").format(price)} \$"),
+                                  trailing: const Icon(Icons.add_circle, color: kPrimaryLight),
+                                  onTap: () {
+                                    setState(() {
+                                      final ex = cart.where((c) => c.productId == p.id).toList();
+                                      if (ex.isNotEmpty) {
+                                        ex.first.qty += 1;
+                                      } else {
+                                        cart.add(CartItem(
+                                          productId: p.id,
+                                          groupId: selectedGroupId!,
+                                          name: p['name'] ?? "",
+                                          unit: p['unit'] ?? "عدد",
+                                          priceUSD: price,
+                                          qty: 1,
+                                        ));
+                                      }
+                                    });
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        title: const Text("فاتورة جديدة"),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: cart.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        if (quantity <= 5)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text("ناقص", style: TextStyle(color: Colors.white, fontSize: 10)),
-                          ),
+                        Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.blue[200]),
+                        const SizedBox(height: 12),
+                        const Text("لم تتم إضافة منتجات بعد", style: TextStyle(color: Colors.grey)),
                       ],
                     ),
-                    Text("السعر: \$${priceUSD.toStringAsFixed(2)} / $priceLBP ل.ل", style: TextStyle(color: Colors.grey[600])),
-                    Text("المخزون: $quantity $unit", style: TextStyle(
-                      color: quantity <= 5 ? Colors.red : Colors.grey[700],
-                      fontWeight: quantity <= 5 ? FontWeight.bold : FontWeight.normal,
-                    )),
-                    if (updatedAt != null)
-                      Text("آخر تحديث: ${DateFormat('yyyy/MM/dd HH:mm').format(updatedAt.toDate())}", 
-                           style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: cart.length,
+                    itemBuilder: (c, i) {
+                      final item = cart[i];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    GestureDetector(
+                                      onTap: () => _editQtyDialog(item),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: kPrimaryLight.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          item.qtyType == "سعر_مباشر"
+                                              ? "سعر: ${NumberFormat("#,##0.##").format(item.totalUSD)} \$  ✏️"
+                                              : "${item.qty.toStringAsFixed(item.qty % 1 == 0 ? 0 : 2)} ${item.qtyType}  ✏️",
+                                          style: const TextStyle(fontSize: 12, color: kPrimaryLight),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (item.qtyType != "سعر_مباشر") ...[
+                                IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: () => setState(() {
+                                    item.qty -= 1;
+                                    if (item.qty <= 0) cart.removeAt(i);
+                                  }),
+                                ),
+                                Text(item.qty.toStringAsFixed(item.qty % 1 == 0 ? 0 : 2)),
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  onPressed: () => setState(() => item.qty += 1),
+                                ),
+                              ],
+                              Text(
+                                "${NumberFormat("#,##0.##").format(item.totalUSD)} \$",
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimary),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, color: Colors.red, size: 18),
+                                onPressed: () => setState(() => cart.removeAt(i)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, -2))],
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("الإجمالي:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text("${NumberFormat("#,##0.##").format(totalUSD)} \$",
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimary, fontSize: 15)),
+                        Text("ل.س ق: ${NumberFormat("#,##0").format(totalLiraOld)}",
+                            style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        Text("ل.س ج: ${NumberFormat("#,##0.##").format(totalLiraNew)}",
+                            style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickProducts,
+                        icon: const Icon(Icons.add_shopping_cart),
+                        label: const Text("إضافة منتج"),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          if (cart.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("أضف منتجات أولاً"), backgroundColor: Colors.orange),
+                            );
+                            return;
+                          }
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => PaymentPage(
+                              storeId: widget.storeId,
+                              empName: widget.empName,
+                              currentDollar: widget.currentDollar,
+                              cart: cart,
+                              totalUSD: totalUSD,
+                            ),
+                          ));
+                        },
+                        icon: const Icon(Icons.payments),
+                        label: const Text("الدفع"),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PaymentPage extends StatefulWidget {
+  final String storeId, empName;
+  final double currentDollar, totalUSD;
+  final List<CartItem> cart;
+  const PaymentPage({
+    super.key,
+    required this.storeId,
+    required this.empName,
+    required this.currentDollar,
+    required this.cart,
+    required this.totalUSD,
+  });
+  @override
+  State<PaymentPage> createState() => _PaymentPageState();
+}
+
+class _PaymentPageState extends State<PaymentPage> {
+  final paidCtrl = TextEditingController();
+  final customerCtrl = TextEditingController();
+  String paidCurrency = "دولار";
+  bool saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    paidCtrl.text = widget.totalUSD.toStringAsFixed(2);
+  }
+
+  double _toUSD(double val, String currency) {
+    if (currency == "دولار") return val;
+    if (currency == "ل.س قديمة") return widget.currentDollar > 0 ? val / widget.currentDollar : 0;
+    return widget.currentDollar > 0 ? (val * 100) / widget.currentDollar : 0;
+  }
+
+  double get paidUSD => _toUSD(double.tryParse(paidCtrl.text) ?? 0, paidCurrency);
+  double get remaining => (widget.totalUSD - paidUSD).clamp(0, double.infinity);
+  bool get isDebt => remaining > 0.0001;
+
+  Future<void> _save() async {
+    if (isDebt && customerCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("يجب إدخال اسم الزبون عند وجود متبقي"), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    setState(() => saving = true);
+
+    final itemsData = widget.cart.map((c) => {
+      'productId': c.productId,
+      'groupId': c.groupId,
+      'name': c.name,
+      'unit': c.qtyType,
+      'priceUSD': c.priceUSD,
+      'qty': c.qty,
+      'totalUSD': c.totalUSD,
+    }).toList();
+
+    await FirebaseFirestore.instance
+        .collection('stores').doc(widget.storeId).collection('invoices').add({
+      'items': itemsData,
+      'totalUSD': widget.totalUSD,
+      'paidUSD': paidUSD,
+      'remainingUSD': isDebt ? remaining : 0.0,
+      'isDebt': isDebt,
+      'isPaid': !isDebt,
+      'customerName': isDebt ? customerCtrl.text.trim() : null,
+      'employeeName': widget.empName,
+      'dollarRateAtSale': widget.currentDollar,
+      'createdAt': FieldValue.serverTimestamp(),
+      'dateStr': DateTime.now().toString().substring(0, 16),
+    });
+
+    for (final c in widget.cart) {
+      if (c.qtyType != "سعر_مباشر") {
+        double deduct = c.qtyType == "غرام" ? c.qty / 1000 : c.qty;
+        await FirebaseFirestore.instance
+            .collection('stores').doc(widget.storeId)
+            .collection('groups').doc(c.groupId)
+            .collection('products').doc(c.productId)
+            .update({'qty': FieldValue.increment(-deduct)});
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => saving = false);
+    Navigator.popUntil(context, (route) => route.isFirst);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isDebt ? "تم حفظ الفاتورة في قسم الدين" : "✅ تم حفظ الفاتورة بنجاح"),
+        backgroundColor: isDebt ? Colors.orange : Colors.green,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        title: const Text("الدفع"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("إجمالي الفاتورة"),
+                        Text("${NumberFormat("#,##0.##").format(widget.totalUSD)} \$",
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("ل.س قديمة:"),
+                        Text(NumberFormat("#,##0").format(widget.totalUSD * widget.currentDollar)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("ل.س جديدة:"),
+                        Text(NumberFormat("#,##0.##").format(widget.totalUSD * widget.currentDollar / 100)),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: paidCtrl,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(labelText: "المبلغ المدفوع", border: OutlineInputBorder()),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                DropdownButton<String>(
+                  value: paidCurrency,
+                  items: ["دولار", "ل.س قديمة", "ل.س جديدة"]
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) => setState(() => paidCurrency = v ?? "دولار"),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (isDebt) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange[300]!),
+                ),
+                child: Text(
+                  "متبقي: ${NumberFormat("#,##0.##").format(remaining)} \$ — ستُسجَّل في الدين",
+                  style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: customerCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(labelText: "اسم الزبون *", border: OutlineInputBorder()),
+              ),
+              if (customerCtrl.text.trim().isNotEmpty)
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('stores').doc(widget.storeId)
+                      .collection('invoices').where('isPaid', isEqualTo: false).snapshots(),
+                  builder: (_, snap) {
+                    if (!snap.hasData) return const SizedBox();
+                    final existing = snap.data!.docs.where((d) {
+                      final data = d.data() as Map<String, dynamic>;
+                      return (data['customerName'] ?? "").toString().toLowerCase() ==
+                          customerCtrl.text.trim().toLowerCase();
+                    }).toList();
+                    if (existing.isEmpty) return const SizedBox();
+                    final totalDebt = existing.fold<double>(
+                        0, (s, d) => s + ((d.data() as Map<String, dynamic>)['remainingUSD'] ?? 0));
+                    return Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red[200]!),
+                      ),
+                      child: Text(
+                        "⚠️ ${customerCtrl.text} عنده دين سابق: ${NumberFormat("#,##0.##").format(totalDebt)} \$",
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    );
+                  },
+                ),
             ],
+            const Spacer(),
+            ElevatedButton(
+              onPressed: saving ? null : _save,
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+              child: saving
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text("حفظ الفاتورة", style: TextStyle(fontSize: 16)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class InvoicesPage extends StatefulWidget {
+  final String storeId;
+  final bool debtOnly;
+  const InvoicesPage({super.key, required this.storeId, required this.debtOnly});
+  @override
+  State<InvoicesPage> createState() => _InvoicesPageState();
+}
+
+class _InvoicesPageState extends State<InvoicesPage> {
+  String _search = "";
+
+  @override
+  Widget build(BuildContext context) {
+    Query query = FirebaseFirestore.instance
+        .collection('stores').doc(widget.storeId).collection('invoices')
+        .orderBy('createdAt', descending: true);
+    if (widget.debtOnly) {
+      query = query.where('isPaid', isEqualTo: false);
+    } else {
+      query = query.where('isPaid', isEqualTo: true);
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
         ),
+        title: Text(widget.debtOnly ? "قسم الدين" : "الفواتير"),
+      ),
+      body: Column(
+        children: [
+          if (widget.debtOnly)
+            StreamBuilder<QuerySnapshot>(
+              stream: query.snapshots(),
+              builder: (_, snap) {
+                if (!snap.hasData) return const SizedBox();
+                final total = snap.data!.docs.fold<double>(
+                    0, (s, d) => s + ((d.data() as Map<String, dynamic>)['remainingUSD'] ?? 0));
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  color: Colors.red[50],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.warning_amber, color: Colors.red, size: 18),
+                      const SizedBox(width: 8),
+                      Text("إجمالي الديون: ${NumberFormat("#,##0.##").format(total)} \$",
+                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                );
+              },
+            ),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: widget.debtOnly ? "بحث باسم الزبون..." : "بحث في الفواتير...",
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+              onChanged: (v) => setState(() => _search = v),
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: query.snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                var invoices = snapshot.data!.docs.where((d) {
+                  if (_search.isEmpty) return true;
+                  final data = d.data() as Map<String, dynamic>;
+                  final customer = (data['customerName'] ?? "").toString().toLowerCase();
+                  final emp = (data['employeeName'] ?? "").toString().toLowerCase();
+                  return customer.contains(_search.toLowerCase()) || emp.contains(_search.toLowerCase());
+                }).toList();
+
+                if (invoices.isEmpty) {
+                  return Center(
+                    child: Text(widget.debtOnly ? "لا توجد ديون" : "لا توجد فواتير",
+                        style: const TextStyle(color: Colors.grey)),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(10),
+                  itemCount: invoices.length,
+                  itemBuilder: (c, i) {
+                    final inv = invoices[i];
+                    final data = inv.data() as Map<String, dynamic>;
+                    final items = (data['items'] as List<dynamic>? ?? []);
+                    return Card(
+                      color: widget.debtOnly ? Colors.red[50] : null,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ExpansionTile(
+                        title: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "${NumberFormat("#,##0.##").format(data['totalUSD'] ?? 0)} \$",
+                              style: TextStyle(fontWeight: FontWeight.bold,
+                                  color: widget.debtOnly ? Colors.red[800] : kPrimary),
+                            ),
+                            if (widget.debtOnly)
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                                icon: const Icon(Icons.payment, size: 14),
+                                label: const Text("تسديد", style: TextStyle(fontSize: 12)),
+                                onPressed: () => _payDebtDialog(inv, data),
+                              ),
+                          ],
+                        ),
+                        subtitle: Text(
+                          "البائع: ${data['employeeName'] ?? ''} • ${data['dateStr'] ?? ''}"
+                          "${widget.debtOnly ? '\nالزبون: ${data['customerName'] ?? ''} — متبقي: ${NumberFormat("#,##0.##").format(data['remainingUSD'] ?? 0)} \$' : ''}",
+                          style: TextStyle(color: widget.debtOnly ? Colors.red[700] : Colors.grey[600], fontSize: 12),
+                        ),
+                        children: [
+                          ...items.map((it) {
+                            final m = it as Map<String, dynamic>;
+                            return ListTile(
+                              dense: true,
+                              title: Text(m['name'] ?? ''),
+                              trailing: Text(
+                                "${m['qty']} ${m['unit'] ?? ''} = ${NumberFormat("#,##0.##").format(m['totalUSD'] ?? 0)}\$",
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            );
+                          }),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Row(
+                              children: [
+                                TextButton.icon(
+                                  icon: const Icon(Icons.share, size: 16),
+                                  label: const Text("مشاركة", style: TextStyle(fontSize: 12)),
+                                  onPressed: () => _shareInvoice(data, items),
+                                ),
+                                const Spacer(),
+                                TextButton.icon(
+                                  icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+                                  label: const Text("حذف", style: TextStyle(color: Colors.red, fontSize: 12)),
+                                  onPressed: () => _deleteInvoice(inv),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _payDebtDialog(QueryDocumentSnapshot inv, Map<String, dynamic> data) {
+    final ctrl = TextEditingController();
+    String currency = "دولار";
+    final currentDollar = (data['dollarRateAtSale'] ?? 15000.0).toDouble();
+
+    showDialog(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setD) => AlertDialog(
+          title: Text("تسديد دين: ${data['customerName'] ?? ''}"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("المتبقي: ${NumberFormat("#,##0.##").format(data['remainingUSD'] ?? 0)} \$"),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: ctrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: "المبلغ المدفوع"),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButton<String>(
+                    value: currency,
+                    items: ["دولار", "ل.س قديمة", "ل.س جديدة"]
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                    onChanged: (v) => setD(() => currency = v ?? "دولار"),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: const Text("إلغاء")),
+            ElevatedButton(
+              onPressed: () async {
+                double paid = double.tryParse(ctrl.text) ?? 0;
+                double paidUSD;
+                if (currency == "دولار") paidUSD = paid;
+                else if (currency == "ل.س قديمة") paidUSD = currentDollar > 0 ? paid / currentDollar : 0;
+                else paidUSD = currentDollar > 0 ? (paid * 100) / currentDollar : 0;
+
+                final remaining = ((data['remainingUSD'] ?? 0) - paidUSD).clamp(0.0, double.infinity);
+                final isPaid = remaining < 0.001;
+
+                await inv.reference.update({
+                  'paidUSD': (data['paidUSD'] ?? 0) + paidUSD,
+                  'remainingUSD': remaining,
+                  'isPaid': isPaid,
+                  'isDebt': !isPaid,
+                });
+
+                Navigator.pop(c);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isPaid
+                        ? "✅ تم تسديد الدين كامل — انتقلت للفواتير"
+                        : "تم تسجيل الدفعة، متبقي: ${NumberFormat("#,##0.##").format(remaining)} \$"),
+                    backgroundColor: isPaid ? Colors.green : Colors.orange,
+                  ),
+                );
+              },
+              child: const Text("تأكيد التسديد"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _shareInvoice(Map<String, dynamic> data, List<dynamic> items) {
+    final sb = StringBuffer();
+    sb.writeln("🧾 فاتورة ترويقة");
+    sb.writeln("━━━━━━━━━━━━━━━━");
+    sb.writeln("📅 ${data['dateStr'] ?? ''}");
+    sb.writeln("👤 البائع: ${data['employeeName'] ?? ''}");
+    if (data['customerName'] != null) sb.writeln("🛒 الزبون: ${data['customerName']}");
+    sb.writeln("━━━━━━━━━━━━━━━━");
+    for (final it in items) {
+      final m = it as Map<String, dynamic>;
+      sb.writeln("• ${m['name']} — ${m['qty']} ${m['unit'] ?? ''} = ${NumberFormat("#,##0.##").format(m['totalUSD'] ?? 0)} \$");
+    }
+    sb.writeln("━━━━━━━━━━━━━━━━");
+    sb.writeln("💵 الإجمالي: ${NumberFormat("#,##0.##").format(data['totalUSD'] ?? 0)} \$");
+    sb.writeln("✅ المدفوع: ${NumberFormat("#,##0.##").format(data['paidUSD'] ?? 0)} \$");
+    if ((data['remainingUSD'] ?? 0) > 0) {
+      sb.writeln("⚠️ المتبقي: ${NumberFormat("#,##0.##").format(data['remainingUSD'])} \$");
+    }
+    Share.share(sb.toString(), subject: "فاتورة ترويقة");
+  }
+
+  void _deleteInvoice(QueryDocumentSnapshot inv) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("حذف الفاتورة"),
+        content: const Text("هل تريد حذف هذه الفاتورة نهائياً؟"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await inv.reference.delete();
+              Navigator.pop(context);
+            },
+            child: const Text("حذف"),
+          ),
+        ],
       ),
     );
   }
