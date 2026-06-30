@@ -117,7 +117,10 @@ class _RootAppState extends State<RootApp> {
           brightness: Brightness.dark,
         ),
       ),
-      home: showSplash ? const CustomSplashScreen() : const MainApp(),
+      home: showSplash ? const CustomSplashScreen() : MainApp(
+        initialDarkMode: darkMode,
+        onToggleDarkMode: setDarkMode,
+      ),
     );
   }
 }
@@ -165,7 +168,7 @@ class _CustomSplashScreenState extends State<CustomSplashScreen> with SingleTick
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // رسومات زخرفية (محاكاة للمنتجات في الصورة)
+            // رسومات زخرفية
             Positioned(
               top: 60,
               left: 20,
@@ -283,7 +286,15 @@ class _CustomSplashScreenState extends State<CustomSplashScreen> with SingleTick
 // التطبيق الرئيسي - الصفحات والتنقل
 // ============================================================
 class MainApp extends StatefulWidget {
-  const MainApp({super.key});
+  final bool initialDarkMode;
+  final Future<void> Function(bool) onToggleDarkMode;
+
+  const MainApp({
+    super.key, 
+    required this.initialDarkMode, 
+    required this.onToggleDarkMode
+  });
+
   @override
   State<MainApp> createState() => _MainAppState();
 }
@@ -1678,7 +1689,7 @@ class _MainAppState extends State<MainApp> {
   }
 
   // ============================================================
-  // الصفحة 4: الإعدادات (المطورة بالكامل)
+  // الصفحة 4: الإعدادات (تم إصلاح خطأ Dark Mode نهائياً)
   // ============================================================
   bool _isUpdating = false;
   final TextEditingController _dollarCtrl = TextEditingController();
@@ -1791,13 +1802,13 @@ class _MainAppState extends State<MainApp> {
           
           // عام
           _buildSettingsCard("عام", [
+            // ===== هذا هو الجزء المصلح 100% =====
             SwitchListTile(
               title: const Text("الوضع الليلي"),
-              value: (context as Element).findAncestorWidgetOfExactType<RootApp>()?.darkMode ?? false,
-              onChanged: (v) {
-                (context as Element).findAncestorStateOfType<_RootAppState>()?.setDarkMode(v);
-              },
+              value: widget.initialDarkMode,
+              onChanged: (v) => widget.onToggleDarkMode(v),
             ),
+            // ====================================
             ListTile(
               leading: const Icon(Icons.info, color: Colors.blue),
               title: const Text("حول التطبيق"),
